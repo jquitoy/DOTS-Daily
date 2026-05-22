@@ -1,4 +1,5 @@
 import { useAuth } from '../contexts/AuthContext';
+import { formatPersonName } from '../lib/personName';
 import { useMedications } from '../contexts/MedicationsContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -74,7 +75,7 @@ export function Dashboard({ onViewChange, onTriggerAlarm }: DashboardProps) {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      <div className="relative overflow-hidden bg-gradient-to-br from-primary via-cyan-500 to-teal-400 px-4 pb-28 pt-6 sm:px-6 lg:px-8">
+      <div className="relative -mt-8 overflow-hidden bg-gradient-to-br from-primary via-cyan-500 to-teal-400 px-4 pb-32 pt-16 sm:-mt-10 sm:px-6 sm:pt-18 lg:-mt-12 lg:px-8 lg:pt-20">
         <div className="absolute top-10 right-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
         <div className="absolute top-24 left-8 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
         <div className="absolute bottom-8 right-1/3 h-24 w-24 rounded-full bg-white/10 blur-2xl" />
@@ -87,7 +88,9 @@ export function Dashboard({ onViewChange, onTriggerAlarm }: DashboardProps) {
               </div>
               <div>
                 <p className="text-sm text-white/80">Welcome back,</p>
-                <p className="text-xl font-bold text-white">{user?.name}</p>
+                <p className="text-xl font-bold text-white">
+                  {user ? formatPersonName(user) : ''}
+                </p>
                 <p className="text-xs text-white/75">{today}</p>
               </div>
             </div>
@@ -147,7 +150,7 @@ export function Dashboard({ onViewChange, onTriggerAlarm }: DashboardProps) {
         <div className="absolute bottom-0 left-0 right-0 h-10 bg-background" style={{ borderRadius: '50% 50% 0 0 / 100% 100% 0 0' }} />
       </div>
 
-      <div className="mx-auto -mt-16 max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto mt-10 max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Card className="shadow-lg transition-shadow duration-300 hover:shadow-xl">
             <CardContent className="pt-6">

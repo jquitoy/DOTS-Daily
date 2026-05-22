@@ -3,9 +3,21 @@ import { useAuth } from '../contexts/AuthContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from './ui/card';
 import { AlertCircle, Pill, Shield } from 'lucide-react';
 import { Alert, AlertDescription } from './ui/alert';
+import { PersonNameFields } from './PersonNameFields';
+import {
+  emptyPersonName,
+  isPersonNameValid,
+  normalizePersonNameInput,
+} from '../lib/personName';
 
 interface SignupPageProps {
   onSwitchToLogin: () => void;
@@ -13,7 +25,7 @@ interface SignupPageProps {
 
 export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
   const { signup } = useAuth();
-  const [name, setName] = useState('');
+  const [personName, setPersonName] = useState(emptyPersonName());
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -34,13 +46,22 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
       return;
     }
 
+    if (!isPersonNameValid(personName)) {
+      setError('First name and last name are required');
+      return;
+    }
+
     setLoading(true);
-    const success = await signup(email, password, name);
-    
+    const success = await signup(
+      email,
+      password,
+      normalizePersonNameInput(personName),
+    );
+
     if (!success) {
       setError('Email already registered');
     }
-    
+
     setLoading(false);
   };
 
@@ -63,9 +84,12 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
                   <Pill className="h-8 w-8 text-primary" />
                 </div>
                 <div>
-                  <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Join DOTS Daily</h1>
+                  <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+                    Join DOTS Daily
+                  </h1>
                   <p className="mt-3 max-w-md text-sm leading-6 text-white/85 sm:text-base">
-                    Create a treatment account to track medication dates, reminders, and progress.
+                    Create a treatment account to track medication dates,
+                    reminders, and progress.
                   </p>
                 </div>
               </div>
@@ -89,83 +113,84 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
                     <Pill className="w-7 h-7" />
                   </div>
                 </div>
-                <CardTitle className="text-center text-2xl">Create your account</CardTitle>
+                <CardTitle className="text-center text-2xl">
+                  Create your account
+                </CardTitle>
                 <CardDescription className="text-center">
                   Join DOTS Daily for your TB treatment journey.
                 </CardDescription>
               </CardHeader>
               <CardContent className="px-0 pb-0">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  {error && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
 
-            <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
-              <Input
-                id="name"
-                type="text"
-                placeholder="Jane Smith"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
+                  <PersonNameFields
+                    idPrefix="signup"
+                    value={personName}
+                    onChange={setPersonName}
+                    required
+                  />
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="At least 6 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="At least 6 characters"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                  </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="Re-enter your password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-              />
-            </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirm Password</Label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      placeholder="Re-enter your password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                    />
+                  </div>
 
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={loading}>
-              {loading ? 'Creating account...' : 'Sign Up'}
-            </Button>
+                  <Button
+                    type="submit"
+                    className="w-full bg-primary hover:bg-primary/90"
+                    disabled={loading}
+                  >
+                    {loading ? 'Creating account...' : 'Sign Up'}
+                  </Button>
 
-            <p className="text-center text-sm text-muted-foreground">
-              Already have an account?{' '}
-              <button
-                type="button"
-                onClick={onSwitchToLogin}
-                className="text-primary hover:underline"
-              >
-                Sign in
-              </button>
-            </p>
-          </form>
+                  <p className="text-center text-sm text-muted-foreground">
+                    Already have an account?{' '}
+                    <button
+                      type="button"
+                      onClick={onSwitchToLogin}
+                      className="text-primary hover:underline"
+                    >
+                      Sign in
+                    </button>
+                  </p>
+                </form>
               </CardContent>
             </Card>
           </div>

@@ -5,14 +5,21 @@ import React, {
   useEffect,
   useState,
 } from 'react';
+import {
+  formatPersonName,
+  isPersonNameValid,
+  normalizePersonNameInput,
+  PersonName,
+  PersonNameInput,
+  resolvePersonName,
+} from '../lib/personName';
 
 type UserRole = 'user' | 'admin';
 type UserStatus = 'active' | 'inactive';
 
-export interface User {
+export interface User extends PersonName {
   id: string;
   email: string;
-  name: string;
   role: UserRole;
   avatar?: string;
   phone?: string;
@@ -48,8 +55,7 @@ export interface AuthLog {
 
 type StoredUser = AdminUser & { password: string };
 
-type CreateUserInput = {
-  name: string;
+type CreateUserInput = PersonNameInput & {
   email: string;
   password: string;
   role: UserRole;
@@ -71,7 +77,11 @@ interface AuthContextType {
   users: AdminUser[];
   authLogs: AuthLog[];
   login: (email: string, password: string) => Promise<boolean>;
-  signup: (email: string, password: string, name: string) => Promise<boolean>;
+  signup: (
+    email: string,
+    password: string,
+    name: PersonNameInput,
+  ) => Promise<boolean>;
   logout: () => void;
   updateProfile: (updates: Partial<User>) => void;
   createUser: (input: CreateUserInput) => boolean;
@@ -88,7 +98,8 @@ const seedUsers: StoredUser[] = [
   {
     id: '1',
     email: 'user@doti.com',
-    name: 'Jane Smith',
+    firstName: 'Jane',
+    lastName: 'Smith',
     role: 'user',
     status: 'active',
     phone: '+1 (555) 123-4567',
@@ -103,7 +114,8 @@ const seedUsers: StoredUser[] = [
   {
     id: '2',
     email: 'admin@doti.com',
-    name: 'Admin User',
+    firstName: 'Admin',
+    lastName: 'User',
     role: 'admin',
     status: 'active',
     password: 'admin123',
@@ -115,7 +127,8 @@ const seedUsers: StoredUser[] = [
   {
     id: '3',
     email: 'mary.j@email.com',
-    name: 'Mary Johnson',
+    firstName: 'Mary',
+    lastName: 'Johnson',
     role: 'user',
     status: 'active',
     phone: '+1 (555) 123-4568',
@@ -127,7 +140,8 @@ const seedUsers: StoredUser[] = [
   {
     id: '4',
     email: 'inactive.patient@email.com',
-    name: 'Robert Brown',
+    firstName: 'Robert',
+    lastName: 'Brown',
     role: 'user',
     status: 'inactive',
     phone: '+1 (555) 123-4569',
@@ -157,17 +171,26 @@ function safeJsonParse<T>(value: string | null, fallback: T): T {
 function normalizeUser(
   user: Partial<StoredUser> & {
     email: string;
-    name: string;
     role: UserRole;
     password: string;
-  },
+  } & PersonNameInput,
 ): StoredUser {
   const now = new Date().toISOString();
+  const resolvedName = resolvePersonName(user);
+  const normalizedName = normalizePersonNameInput({
+    firstName: resolvedName.firstName,
+    middleName: resolvedName.middleName,
+    lastName: resolvedName.lastName,
+    suffix: resolvedName.suffix,
+  });
 
   return {
     id: user.id ?? generateId(),
     email: user.email,
-    name: user.name,
+    firstName: normalizedName.firstName,
+    middleName: normalizedName.middleName || undefined,
+    lastName: normalizedName.lastName,
+    suffix: normalizedName.suffix || undefined,
     role: user.role,
     status: user.status ?? 'active',
     avatar: user.avatar,
@@ -338,7 +361,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     appendLog({
       type: 'login',
       userId: matchedUser.id,
-      name: matchedUser.name,
+      name: formatPersonName(matchedUser),
       email: matchedUser.email,
       role: matchedUser.role,
       note: 'Successful login',
@@ -350,7 +373,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signup = async (
     email: string,
     password: string,
-    name: string,
+    name: PersonNameInput,
   ): Promise<boolean> => {
     await new Promise((resolve) => setTimeout(resolve, 400));
 
@@ -363,11 +386,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return false;
     }
 
+    if (!isPersonNameValid(name)) {
+      return false;
+    }
+
     const now = new Date().toISOString();
     const newStoredUser = normalizeUser({
       id: generateId(),
       email: normalizedEmail,
-      name: name.trim(),
+      ...normalizePersonNameInput(name),
       role: 'user',
       status: 'active',
       password,
@@ -381,7 +408,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     appendLog({
       type: 'signup',
       userId: newStoredUser.id,
-      name: newStoredUser.name,
+      name: formatPersonName(newStoredUser),
       email: newStoredUser.email,
       role: newStoredUser.role,
       note: 'New account created through signup',
@@ -395,7 +422,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       appendLog({
         type: 'logout',
         userId: user.id,
-        name: user.name,
+        name: formatPersonName(user),
         email: user.email,
         role: user.role,
         note: 'User logged out',
@@ -453,7 +480,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const normalizedEmail = input.email.trim().toLowerCase();
-    if (!normalizedEmail || !input.name.trim() || !input.password.trim()) {
+    if (
+      !normalizedEmail ||
+      !isPersonNameValid(input) ||
+      !input.password.trim()
+    ) {
       return false;
     }
 
@@ -469,7 +500,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const newUser = normalizeUser({
       id: generateId(),
       email: normalizedEmail,
-      name: input.name.trim(),
+      ...normalizePersonNameInput(input),
       role: input.role,
       status: input.status ?? 'active',
       phone: input.phone?.trim() || undefined,
@@ -485,11 +516,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     appendLog({
       type: 'user-created',
       userId: newUser.id,
-      name: newUser.name,
+      name: formatPersonName(newUser),
       email: newUser.email,
       role: newUser.role,
       performedBy: user.email,
-      note: `Created by ${user.name}`,
+      note: `Created by ${formatPersonName(user)}`,
     });
 
     return true;
@@ -540,11 +571,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     appendLog({
       type: 'user-updated',
       userId: updatedRecord.id,
-      name: updatedRecord.name,
+      name: formatPersonName(updatedRecord),
       email: updatedRecord.email,
       role: updatedRecord.role,
       performedBy: user.email,
-      note: `Updated by ${user.name}`,
+      note: `Updated by ${formatPersonName(user)}`,
     });
 
     return true;
@@ -566,11 +597,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     appendLog({
       type: 'user-deleted',
       userId: currentRecord.id,
-      name: currentRecord.name,
+      name: formatPersonName(currentRecord),
       email: currentRecord.email,
       role: currentRecord.role,
       performedBy: user.email,
-      note: `Deleted by ${user.name}`,
+      note: `Deleted by ${formatPersonName(user)}`,
     });
 
     return true;

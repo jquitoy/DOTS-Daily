@@ -64,12 +64,20 @@ import {
   Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { PersonNameFields } from './PersonNameFields';
+import {
+  emptyPersonName,
+  formatPersonName,
+  isPersonNameValid,
+  normalizePersonNameInput,
+  PersonNameInput,
+} from '../lib/personName';
 
 type TabKey = 'overview' | 'users' | 'logs';
 type FormMode = 'create' | 'edit' | 'view';
 
 type UserFormState = {
-  name: string;
+  personName: PersonNameInput;
   email: string;
   password: string;
   role: AdminUser['role'];
@@ -81,7 +89,7 @@ type UserFormState = {
 };
 
 const emptyForm = (): UserFormState => ({
-  name: '',
+  personName: emptyPersonName(),
   email: '',
   password: '',
   role: 'user',
@@ -180,8 +188,13 @@ export function AdminPortal() {
 
   const filteredUsers = users.filter((candidate) => {
     const query = searchQuery.toLowerCase();
+    const displayName = formatPersonName(candidate).toLowerCase();
     return (
-      candidate.name.toLowerCase().includes(query) ||
+      displayName.includes(query) ||
+      candidate.firstName.toLowerCase().includes(query) ||
+      (candidate.middleName ?? '').toLowerCase().includes(query) ||
+      candidate.lastName.toLowerCase().includes(query) ||
+      (candidate.suffix ?? '').toLowerCase().includes(query) ||
       candidate.email.toLowerCase().includes(query) ||
       candidate.role.toLowerCase().includes(query) ||
       candidate.status.toLowerCase().includes(query)
@@ -226,7 +239,12 @@ export function AdminPortal() {
     setSelectedUser(candidate);
     setFormMode('edit');
     setFormState({
-      name: candidate.name,
+      personName: {
+        firstName: candidate.firstName,
+        middleName: candidate.middleName ?? '',
+        lastName: candidate.lastName,
+        suffix: candidate.suffix ?? '',
+      },
       email: candidate.email,
       password: '',
       role: candidate.role,
@@ -243,7 +261,12 @@ export function AdminPortal() {
     setSelectedUser(candidate);
     setFormMode('view');
     setFormState({
-      name: candidate.name,
+      personName: {
+        firstName: candidate.firstName,
+        middleName: candidate.middleName ?? '',
+        lastName: candidate.lastName,
+        suffix: candidate.suffix ?? '',
+      },
       email: candidate.email,
       password: '',
       role: candidate.role,
@@ -264,10 +287,12 @@ export function AdminPortal() {
       return;
     }
 
-    if (!formState.name.trim() || !formState.email.trim()) {
-      toast.error('Name and email are required.');
+    if (!isPersonNameValid(formState.personName) || !formState.email.trim()) {
+      toast.error('First name, last name, and email are required.');
       return;
     }
+
+    const normalizedName = normalizePersonNameInput(formState.personName);
 
     if (formMode === 'create' && !formState.password.trim()) {
       toast.error('Password is required for new users.');
@@ -276,7 +301,7 @@ export function AdminPortal() {
 
     if (formMode === 'create') {
       const success = createUser({
-        name: formState.name.trim(),
+        ...normalizedName,
         email: formState.email.trim(),
         password: formState.password,
         role: formState.role,
@@ -305,7 +330,9 @@ export function AdminPortal() {
     }
 
     const success = updateUser(selectedUser.id, {
-      name: formState.name.trim(),
+      ...normalizedName,
+      middleName: normalizedName.middleName || undefined,
+      suffix: normalizedName.suffix || undefined,
       email: formState.email.trim(),
       password: formState.password.trim() || undefined,
       role: formState.role,
@@ -374,7 +401,8 @@ export function AdminPortal() {
           </div>
           <div className="flex items-center gap-3">
             <div className="hidden rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm text-white/90 backdrop-blur-sm sm:block">
-              Logged in as <span className="font-semibold">{user.name}</span>
+              Logged in as{' '}
+              <span className="font-semibold">{formatPersonName(user)}</span>
             </div>
             <Button
               variant="secondary"
@@ -628,7 +656,7 @@ export function AdminPortal() {
                                 </div>
                                 <div>
                                   <p className="font-medium">
-                                    {candidate.name}
+                                    {formatPersonName(candidate)}
                                   </p>
                                   <p className="text-sm text-muted-foreground">
                                     {candidate.email}
@@ -793,7 +821,9 @@ export function AdminPortal() {
                     <UserRound className="h-7 w-7" />
                   </div>
                   <div>
-                    <p className="text-xl font-semibold">{formState.name}</p>
+                    <p className="text-xl font-semibold">
+                      {formatPersonName(formState.personName)}
+                    </p>
                     <p className="text-sm text-muted-foreground">
                       {formState.email}
                     </p>
@@ -856,17 +886,18 @@ export function AdminPortal() {
             <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
               <div className="md:col-span-2">
                 <label className="mb-2 block text-sm font-medium">
-                  Full name
+                  Legal name
                 </label>
-                <Input
-                  value={formState.name}
-                  onChange={(event) =>
+                <PersonNameFields
+                  idPrefix="admin-user"
+                  value={formState.personName}
+                  onChange={(personName) =>
                     setFormState((current) => ({
                       ...current,
-                      name: event.target.value,
+                      personName,
                     }))
                   }
-                  placeholder="Jane Smith"
+                  required
                 />
               </div>
 
@@ -1038,7 +1069,7 @@ export function AdminPortal() {
             <AlertDialogTitle>Delete this user?</AlertDialogTitle>
             <AlertDialogDescription>
               {deleteTarget
-                ? `This will permanently remove ${deleteTarget.name} (${deleteTarget.email}) from the user directory.`
+                ? `This will permanently remove ${formatPersonName(deleteTarget)} (${deleteTarget.email}) from the user directory.`
                 : 'This will permanently remove the selected user from the directory.'}
             </AlertDialogDescription>
           </AlertDialogHeader>

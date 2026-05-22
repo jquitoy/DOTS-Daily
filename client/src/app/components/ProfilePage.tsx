@@ -13,6 +13,14 @@ import {
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { User, Mail, Phone, Calendar, Shield, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
+import { PersonNameFields } from './PersonNameFields';
+import {
+  emptyPersonName,
+  formatPersonName,
+  isPersonNameValid,
+  normalizePersonNameInput,
+  personNameInitials,
+} from '../lib/personName';
 
 interface ProfilePageProps {
   onViewChange?: (view: string) => void;
@@ -22,7 +30,14 @@ export function ProfilePage({ onViewChange }: ProfilePageProps) {
   const { user, updateProfile, logout } = useAuth();
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({
-    name: user?.name || '',
+    personName: user
+      ? {
+          firstName: user.firstName,
+          middleName: user.middleName ?? '',
+          lastName: user.lastName,
+          suffix: user.suffix ?? '',
+        }
+      : emptyPersonName(),
     phone: user?.phone || '',
     dateOfBirth: user?.dateOfBirth || '',
     emergencyContact: user?.emergencyContact || '',
@@ -30,14 +45,35 @@ export function ProfilePage({ onViewChange }: ProfilePageProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    updateProfile(formData);
+
+    if (!isPersonNameValid(formData.personName)) {
+      toast.error('First name and last name are required');
+      return;
+    }
+
+    const normalizedName = normalizePersonNameInput(formData.personName);
+    updateProfile({
+      ...normalizedName,
+      middleName: normalizedName.middleName || undefined,
+      suffix: normalizedName.suffix || undefined,
+      phone: formData.phone,
+      dateOfBirth: formData.dateOfBirth,
+      emergencyContact: formData.emergencyContact,
+    });
     setEditing(false);
     toast.success('Profile updated successfully');
   };
 
   const handleCancel = () => {
     setFormData({
-      name: user?.name || '',
+      personName: user
+        ? {
+            firstName: user.firstName,
+            middleName: user.middleName ?? '',
+            lastName: user.lastName,
+            suffix: user.suffix ?? '',
+          }
+        : emptyPersonName(),
       phone: user?.phone || '',
       dateOfBirth: user?.dateOfBirth || '',
       emergencyContact: user?.emergencyContact || '',
@@ -66,14 +102,12 @@ export function ProfilePage({ onViewChange }: ProfilePageProps) {
             <div className="flex flex-col items-center text-center">
               <Avatar className="w-24 h-24 mb-4">
                 <AvatarFallback className="text-2xl">
-                  {user?.name
-                    .split(' ')
-                    .map((n) => n[0])
-                    .join('')
-                    .toUpperCase()}
+                  {user ? personNameInitials(user) : '?'}
                 </AvatarFallback>
               </Avatar>
-              <h3 className="mb-1">{user?.name}</h3>
+              <h3 className="mb-1">
+                {user ? formatPersonName(user) : 'Unknown user'}
+              </h3>
               <p className="text-sm text-muted-foreground mb-3">
                 {user?.email}
               </p>
@@ -96,18 +130,19 @@ export function ProfilePage({ onViewChange }: ProfilePageProps) {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="name">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>
                     <User className="w-4 h-4 inline mr-1" />
-                    Full Name
+                    Legal name
                   </Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
+                  <PersonNameFields
+                    idPrefix="profile"
+                    value={formData.personName}
+                    onChange={(personName) =>
+                      setFormData({ ...formData, personName })
                     }
                     disabled={!editing}
+                    required
                   />
                 </div>
 

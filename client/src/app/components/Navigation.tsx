@@ -1,5 +1,6 @@
 import { useAuth } from '../contexts/AuthContext';
-import { 
+import { formatPersonName } from '../lib/personName';
+import {
   Activity,
   ArrowRight,
   Bell,
@@ -29,14 +30,16 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
 
   // Determine which view should highlight the medications icon
   const getMedicationsActive = () => {
-    return currentView === 'medications' || 
-           currentView === 'alarms' || 
-           currentView === 'dose-log';
+    return (
+      currentView === 'medications' ||
+      currentView === 'alarms' ||
+      currentView === 'dose-log'
+    );
   };
 
   return (
     <>
-      <div className="sticky top-0 z-50 border-b border-white/20 bg-gradient-to-br from-primary via-cyan-500 to-teal-400 shadow-lg">
+      <div className="sticky top-0 z-50 border-b border-white/20 bg-gradient-to-br from-primary via-cyan-500 to-teal-400 shadow-lg overflow-hidden rounded-b-3xl">
         <div className="absolute top-0 right-0 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
         <div className="absolute bottom-0 left-0 h-36 w-36 rounded-full bg-white/10 blur-3xl" />
 
@@ -48,7 +51,9 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
               </div>
               <div>
                 <p className="text-sm text-white/80">Welcome back,</p>
-                <p className="text-lg font-bold">{user?.name}</p>
+                <p className="text-lg font-bold">
+                  {user ? formatPersonName(user) : ''}
+                </p>
                 <p className="text-xs text-white/75">User portal</p>
               </div>
             </div>
@@ -66,7 +71,10 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
           <div className="mt-5 flex flex-wrap gap-2 rounded-2xl border border-white/20 bg-white/15 p-2 backdrop-blur-sm">
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = item.id === 'medications' ? getMedicationsActive() : currentView === item.id;
+              const isActive =
+                item.id === 'medications'
+                  ? getMedicationsActive()
+                  : currentView === item.id;
 
               return (
                 <button
@@ -78,7 +86,9 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
                       : 'text-white/85 hover:bg-white/10 hover:text-white'
                   }`}
                 >
-                  <Icon className={`h-4 w-4 ${isActive ? 'text-primary' : 'text-white/90'}`} />
+                  <Icon
+                    className={`h-4 w-4 ${isActive ? 'text-primary' : 'text-white/90'}`}
+                  />
                   <span>{item.label}</span>
                 </button>
               );

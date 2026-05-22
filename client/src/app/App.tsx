@@ -12,7 +12,13 @@ import { SymptomsPage } from './components/SymptomsPage';
 import { AdminPortal } from './components/AdminPortal';
 import { AlarmNotificationScreen } from './components/AlarmNotificationScreen';
 import { Button } from './components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from './components/ui/card';
 import { ShieldAlert } from 'lucide-react';
 import { Toaster } from './components/ui/sonner';
 
@@ -27,11 +33,15 @@ function AdminAccessDenied({ onReturnHome }: { onReturnHome: () => void }) {
           </div>
           <CardTitle className="text-2xl">Admin access required</CardTitle>
           <CardDescription className="max-w-md mx-auto">
-            This area is reserved for administrators only. User management, role changes, and audit logs are protected.
+            This area is reserved for administrators only. User management, role
+            changes, and audit logs are protected.
           </CardDescription>
         </CardHeader>
         <CardContent className="pb-8 flex justify-center">
-          <Button onClick={onReturnHome} className="bg-primary hover:bg-primary/90">
+          <Button
+            onClick={onReturnHome}
+            className="bg-primary hover:bg-primary/90"
+          >
             Return to dashboard
           </Button>
         </CardContent>
@@ -94,7 +104,12 @@ function AppContent() {
   const renderView = () => {
     switch (currentView) {
       case 'dashboard':
-        return <Dashboard onViewChange={setCurrentView} onTriggerAlarm={setActiveAlarm} />;
+        return (
+          <Dashboard
+            onViewChange={setCurrentView}
+            onTriggerAlarm={setActiveAlarm}
+          />
+        );
       case 'profile':
         return <ProfilePage onViewChange={setCurrentView} />;
       case 'medications':
@@ -122,16 +137,16 @@ function AppContent() {
         <Navigation currentView={currentView} onViewChange={setCurrentView} />
       )}
       {renderView()}
-      
+
       {/* Alarm Notification Screen */}
       {activeAlarm && (
-        <AlarmNotificationScreen 
+        <AlarmNotificationScreen
           alarm={activeAlarm}
           onDismiss={handleAlarmDismiss}
           onComplete={handleAlarmComplete}
         />
       )}
-      
+
       <Toaster />
     </div>
   );

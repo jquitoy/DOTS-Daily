@@ -3,7 +3,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from './ui/card';
 import { AlertCircle, Pill, Shield } from 'lucide-react';
 import { Alert, AlertDescription } from './ui/alert';
 
@@ -24,11 +30,11 @@ export function LoginPage({ onSwitchToSignup }: LoginPageProps) {
     setLoading(true);
 
     const success = await login(email, password);
-    
+
     if (!success) {
       setError('Invalid email or password');
     }
-    
+
     setLoading(false);
   };
 
@@ -51,9 +57,12 @@ export function LoginPage({ onSwitchToSignup }: LoginPageProps) {
                   <Pill className="h-8 w-8 text-primary" />
                 </div>
                 <div>
-                  <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">DOTS Daily</h1>
+                  <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+                    DOTS Daily
+                  </h1>
                   <p className="mt-3 max-w-md text-sm leading-6 text-white/85 sm:text-base">
-                    Track medication intake, review dose history, and stay aligned with your TB treatment plan.
+                    Track medication intake, review dose history, and stay
+                    aligned with your TB treatment plan.
                   </p>
                 </div>
               </div>
@@ -77,66 +86,78 @@ export function LoginPage({ onSwitchToSignup }: LoginPageProps) {
                     <Pill className="w-7 h-7" />
                   </div>
                 </div>
-                <CardTitle className="text-center text-2xl">Welcome back</CardTitle>
+                <CardTitle className="text-center text-2xl">
+                  Welcome back
+                </CardTitle>
                 <CardDescription className="text-center">
                   Sign in to continue your treatment support workflow.
                 </CardDescription>
               </CardHeader>
               <CardContent className="px-0 pb-0">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  {error && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="Enter your password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                  </div>
 
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign In'}
-            </Button>
+                  <Button
+                    type="submit"
+                    className="w-full bg-primary hover:bg-primary/90"
+                    disabled={loading}
+                  >
+                    {loading ? 'Signing in...' : 'Sign In'}
+                  </Button>
 
-            <div className="text-center space-y-2">
-              <p className="text-sm text-muted-foreground">
-                Don't have an account?{' '}
-                <button
-                  type="button"
-                  onClick={onSwitchToSignup}
-                  className="text-primary hover:underline"
-                >
-                  Sign up
-                </button>
-              </p>
-              <div className="pt-4 border-t">
-                <p className="text-xs text-muted-foreground">Demo credentials:</p>
-                <p className="text-xs text-muted-foreground">User: user@doti.com / password123</p>
-                <p className="text-xs text-muted-foreground">Admin: admin@doti.com / admin123</p>
-              </div>
-            </div>
-          </form>
+                  <div className="text-center space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      Don't have an account?{' '}
+                      <button
+                        type="button"
+                        onClick={onSwitchToSignup}
+                        className="text-primary hover:underline"
+                      >
+                        Sign up
+                      </button>
+                    </p>
+                    <div className="pt-4 border-t">
+                      <p className="text-xs text-muted-foreground">
+                        Demo credentials:
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        User: user@doti.com / password123
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Admin: admin@doti.com / admin123
+                      </p>
+                    </div>
+                  </div>
+                </form>
               </CardContent>
             </Card>
           </div>
