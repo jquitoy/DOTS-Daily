@@ -2,17 +2,20 @@ import { useAuth } from '../contexts/AuthContext';
 import { useMedications } from '../contexts/MedicationsContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
-import { 
-  Pill, 
-  Calendar, 
-  Activity, 
-  Clock,
-  AlertCircle,
+import { Badge } from './ui/badge';
+import {
+  Activity,
+  Calendar,
   CheckCircle2,
+  Clock,
+  History,
+  Pill,
+  Settings,
+  Shield,
   TrendingUp,
   User,
-  Search,
-  Settings
+  Bell,
+  ArrowRight,
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -20,260 +23,343 @@ interface DashboardProps {
   onTriggerAlarm?: (alarm: { id: string; medicationName: string; time: string; dosage: string }) => void;
 }
 
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(value));
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(value));
+}
+
 export function Dashboard({ onViewChange, onTriggerAlarm }: DashboardProps) {
   const { user } = useAuth();
   const { medications, alarms, doseLogs } = useMedications();
 
-  // Get today's date
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
-    day: 'numeric'
+    day: 'numeric',
   });
 
-  // Get upcoming alarms for today
   const now = new Date();
   const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-  const todayAlarms = alarms.filter(alarm => alarm.enabled && alarm.time > currentTime).slice(0, 3);
+  const todayAlarms = alarms.filter((alarm) => alarm.enabled && alarm.time > currentTime).slice(0, 3);
 
-  // Calculate adherence rate
-  const adherenceRate = doseLogs.length > 0 
-    ? Math.round((doseLogs.filter(log => log.verified).length / doseLogs.length) * 100)
-    : 0;
+  const adherenceRate =
+    doseLogs.length > 0
+      ? Math.round((doseLogs.filter((log) => log.verified).length / doseLogs.length) * 100)
+      : 0;
 
-  // Calculate treatment progress (mock: based on dose logs)
   const treatmentDays = doseLogs.length;
-  const totalTreatmentDays = 180; // 6 months
+  const totalTreatmentDays = 180;
   const progressPercentage = Math.min((treatmentDays / totalTreatmentDays) * 100, 100);
 
+  const recentDoseDates = [...doseLogs]
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    .slice(0, 6);
+
+  const upcomingMedicationNames = medications.slice(0, 3).map((medication) => medication.name).join(' • ');
+
   return (
-    <div className="pb-[42px] pt-[0px] pr-[0px] pl-[0px]">
-      {/* Curved Header Section */}
-      <div className="relative bg-gradient-to-br from-primary via-cyan-500 to-teal-400 px-4 sm:px-6 lg:px-8 pt-6 pb-32">
-        {/* Decorative circles */}
-        <div className="absolute top-10 right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-        <div className="absolute top-20 left-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
-        
-        <div className="max-w-7xl mx-auto relative z-10">
-          {/* User Profile Section */}
-          <div className="flex items-center justify-between mb-8">
+    <div className="min-h-screen bg-background pb-20">
+      <div className="relative overflow-hidden bg-gradient-to-br from-primary via-cyan-500 to-teal-400 px-4 pb-28 pt-6 sm:px-6 lg:px-8">
+        <div className="absolute top-10 right-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
+        <div className="absolute top-24 left-8 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
+        <div className="absolute bottom-8 right-1/3 h-24 w-24 rounded-full bg-white/10 blur-2xl" />
+
+        <div className="relative z-10 mx-auto max-w-7xl">
+          <div className="mb-8 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center ring-4 ring-white/30 shadow-lg">
-                <User className="w-7 h-7 text-primary" />
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-lg ring-4 ring-white/30">
+                <User className="h-7 w-7 text-primary" />
               </div>
               <div>
-                <p className="text-white/80 text-sm">Welcome back,</p>
-                <p className="text-white font-bold text-xl">{user?.name}</p>
+                <p className="text-sm text-white/80">Welcome back,</p>
+                <p className="text-xl font-bold text-white">{user?.name}</p>
+                <p className="text-xs text-white/75">{today}</p>
               </div>
             </div>
-            <button 
+
+            <button
               onClick={() => onViewChange('profile')}
-              className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors"
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm transition-colors hover:bg-white/30"
             >
-              <Settings className="w-5 h-5 text-white" />
+              <Settings className="h-5 w-5" />
             </button>
           </div>
 
-          {/* Follow-up Reminder */}
-          <div className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-3 mb-4 border border-white/30">
-            <div className="flex items-center gap-2 justify-center">
-              <Calendar className="w-4 h-4 text-white" />
-              <p className="text-white text-sm font-medium">
-                Your next follow-up is on <span className="font-bold">February 16, 2026</span>
+          <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+            <div className="rounded-3xl border border-white/20 bg-white/15 p-5 text-white shadow-xl backdrop-blur-sm">
+              <div className="mb-4 flex items-center gap-2">
+                <Shield className="h-4 w-4" />
+                <p className="text-sm font-medium uppercase tracking-wide">Treatment status</p>
+              </div>
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <p className="text-4xl font-bold">{Math.round(progressPercentage)}%</p>
+                  <p className="mt-1 text-sm text-white/80">
+                    {treatmentDays} of {totalTreatmentDays} treatment days logged
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-white/15 px-4 py-3 text-right">
+                  <p className="text-xs uppercase tracking-wide text-white/70">Current streak</p>
+                  <p className="text-lg font-semibold">{doseLogs.length > 0 ? `${doseLogs.length} records` : 'Start logging'}</p>
+                </div>
+              </div>
+              <div className="mt-4 h-3 rounded-full bg-white/20">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-white to-cyan-100"
+                  style={{ width: `${progressPercentage}%` }}
+                />
+              </div>
+              <p className="mt-3 text-center text-xs text-white/75">
+                Complete your full course for successful recovery.
               </p>
             </div>
-          </div>
 
-          {/* Treatment Progress Card */}
-          <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 shadow-xl">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <p className="text-sm text-muted-foreground">Treatment Progress</p>
-                <p className="text-2xl font-bold text-foreground mt-1">{Math.round(progressPercentage)}%</p>
+            <div className="rounded-3xl border border-white/20 bg-white/15 p-5 text-white shadow-xl backdrop-blur-sm">
+              <div className="mb-4 flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                <p className="text-sm font-medium uppercase tracking-wide">Next follow-up</p>
               </div>
-              <div className="text-right">
-                <p className="text-sm text-muted-foreground">Day {treatmentDays} of {totalTreatmentDays}</p>
-                <p className="text-xs text-primary font-medium mt-1">Keep going! 💪</p>
+              <p className="text-2xl font-bold">February 16, 2026</p>
+              <p className="mt-2 text-sm text-white/80">Keep your review appointments on schedule.</p>
+              <div className="mt-4 rounded-2xl bg-white/15 px-4 py-3">
+                <p className="text-xs uppercase tracking-wide text-white/70">Medication plan</p>
+                <p className="mt-1 text-sm font-medium">{upcomingMedicationNames || 'Your medication list will appear here.'}</p>
               </div>
             </div>
-            {/* Progress Bar */}
-            <div className="w-full h-3 bg-secondary rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-primary to-teal-400 transition-all duration-500 rounded-full"
-                style={{ width: `${progressPercentage}%` }}
-              ></div>
-            </div>
-            <p className="text-xs text-muted-foreground mt-3 text-center">
-              Complete your full course for successful recovery
-            </p>
           </div>
         </div>
 
-        {/* Curved bottom edge */}
-        <div className="absolute bottom-0 left-0 right-0 h-8 bg-background" style={{ borderRadius: '50% 50% 0 0 / 100% 100% 0 0' }}></div>
+        <div className="absolute bottom-0 left-0 right-0 h-10 bg-background" style={{ borderRadius: '50% 50% 0 0 / 100% 100% 0 0' }} />
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 -mt-16">
-        {/* Quick Stats - Compressed into one row */}
-        <div className="flex justify-center">
-          <div className="grid grid-cols-3 gap-4 max-w-2xl px-[0px] py-[70px] pt-[70px] pr-[0px] pb-[3px] pl-[0px]">
-            <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
-              <CardContent className="pt-7 pb-7 text-center">
-                <div className="flex justify-center mb-3">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Pill className="h-6 w-6 text-primary" />
-                  </div>
+      <div className="mx-auto -mt-16 max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Card className="shadow-lg transition-shadow duration-300 hover:shadow-xl">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Medications</p>
+                  <p className="text-3xl font-bold">{medications.length}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Daily TB regimen</p>
                 </div>
-                <div className="text-3xl font-bold mb-1">{medications.length}</div>
-                <p className="text-sm font-medium text-muted-foreground">TB Meds</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Daily drugs
-                </p>
-              </CardContent>
-            </Card>
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                  <Pill className="h-6 w-6 text-primary" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-            <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
-              <CardContent className="pt-7 pb-7 text-center">
-                <div className="flex justify-center mb-3">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                    <TrendingUp className="h-6 w-6 text-primary" />
-                  </div>
+          <Card className="shadow-lg transition-shadow duration-300 hover:shadow-xl">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Adherence</p>
+                  <p className="text-3xl font-bold">{adherenceRate}%</p>
+                  <p className="text-xs text-muted-foreground mt-1">Based on dose log</p>
                 </div>
-                <div className="text-3xl font-bold mb-1">{adherenceRate}%</div>
-                <p className="text-sm font-medium text-muted-foreground">Adherence</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {doseLogs.length} doses
-                </p>
-              </CardContent>
-            </Card>
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                  <TrendingUp className="h-6 w-6 text-primary" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-            <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
-              <CardContent className="pt-6 pb-6 text-center">
-                <div className="flex justify-center mb-3">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Calendar className="h-6 w-6 text-primary" />
-                  </div>
+          <Card className="shadow-lg transition-shadow duration-300 hover:shadow-xl">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Active reminders</p>
+                  <p className="text-3xl font-bold">{alarms.filter((alarm) => alarm.enabled).length}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Scheduled alarms</p>
                 </div>
-                <div className="text-3xl font-bold mb-1">{alarms.filter(a => a.enabled).length}</div>
-                <p className="text-sm font-medium text-muted-foreground">Reminders</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Active alarms
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                  <Bell className="h-6 w-6 text-primary" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg transition-shadow duration-300 hover:shadow-xl">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Logged doses</p>
+                  <p className="text-3xl font-bold">{doseLogs.length}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Verified and pending</p>
+                </div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                  <History className="h-6 w-6 text-primary" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Upcoming Doses */}
-        <Card className="shadow-md hover:shadow-lg transition-shadow duration-300">
+        <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
+          <Card className="shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between gap-4">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-primary" />
+                  Today&apos;s schedule
+                </CardTitle>
+                <CardDescription>Upcoming medication doses and quick actions</CardDescription>
+              </div>
+              <Button variant="outline" onClick={() => onViewChange('dose-log')}>
+                View full dose log
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {todayAlarms.length > 0 ? (
+                <div className="space-y-3">
+                  {todayAlarms.map((alarm) => (
+                    <div key={alarm.id} className="flex items-center gap-4 rounded-xl border bg-card p-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                        <Clock className="h-6 w-6 text-primary" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">{alarm.medicationName}</p>
+                        <p className="text-sm text-muted-foreground">{alarm.time} {alarm.dosage && `• ${alarm.dosage}`}</p>
+                      </div>
+                      <Button size="sm" onClick={() => onViewChange('dose-log')}>
+                        Log dose
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed p-8 text-center">
+                  <CheckCircle2 className="mx-auto mb-2 h-12 w-12 text-muted-foreground" />
+                  <p className="text-muted-foreground">No upcoming doses scheduled for today.</p>
+                  <Button variant="outline" className="mt-4" onClick={() => onViewChange('alarms')}>
+                    Set up reminders
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-5 w-5 text-primary" />
+                Quick summary
+              </CardTitle>
+              <CardDescription>Fast access to treatment and support views</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button className="w-full justify-between" variant="outline" onClick={() => onViewChange('dose-log')}>
+                Dose log
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+              <Button className="w-full justify-between" variant="outline" onClick={() => onViewChange('medications')}>
+                Medications
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+              <Button className="w-full justify-between" variant="outline" onClick={() => onViewChange('symptoms')}>
+                Symptom monitor
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+              <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">
+                You can review your medication history and the exact dates you took each dose below.
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>Today's Schedule</CardTitle>
-            <CardDescription>Upcoming medication doses</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <History className="h-5 w-5 text-primary" />
+              Medication history
+            </CardTitle>
+            <CardDescription>Dates and times you recorded each medication intake</CardDescription>
           </CardHeader>
           <CardContent>
-            {todayAlarms.length > 0 ? (
+            {recentDoseDates.length === 0 ? (
+              <div className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
+                No medication history yet. Log a dose to begin tracking your dates.
+              </div>
+            ) : (
               <div className="space-y-3">
-                {todayAlarms.map((alarm) => (
-                  <div
-                    key={alarm.id}
-                    className="flex items-center gap-4 p-4 rounded-lg border bg-card"
-                  >
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <Clock className="w-6 h-6 text-primary" />
+                {recentDoseDates.map((log) => (
+                  <div key={log.id} className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className={`flex h-11 w-11 items-center justify-center rounded-full ${log.verified ? 'bg-emerald-100' : 'bg-slate-100'}`}>
+                        <CheckCircle2 className={`h-5 w-5 ${log.verified ? 'text-emerald-600' : 'text-slate-400'}`} />
+                      </div>
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium">{log.medicationName}</p>
+                          <Badge variant={log.verified ? 'default' : 'secondary'}>
+                            {log.verified ? 'Verified' : 'Pending'}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">Taken on {formatDateTime(log.timestamp)}</p>
+                        <p className="text-xs text-muted-foreground">Date: {formatDate(log.timestamp)}</p>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{alarm.medicationName}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {alarm.time} {alarm.dosage && `• ${alarm.dosage}`}
-                      </p>
-                    </div>
-                    <Button 
-                      size="sm" 
-                      onClick={() => onViewChange('dose-log')}
-                    >
-                      Log Dose
+                    <Button variant="ghost" onClick={() => onViewChange('dose-log')}>
+                      View in log
                     </Button>
                   </div>
                 ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <CheckCircle2 className="w-12 h-12 text-muted-foreground mx-auto mb-2" />
-                <p className="text-muted-foreground">No upcoming doses scheduled for today</p>
-                <Button 
-                  variant="outline" 
-                  className="mt-4"
-                  onClick={() => onViewChange('alarms')}
-                >
-                  Set Up Alarms
-                </Button>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Health Check Reminder */}
-        <Card className="border-orange-200 bg-orange-50/50 shadow-md hover:shadow-lg transition-shadow duration-300">
+        <Card className="border-orange-200 bg-orange-50/50 shadow-md transition-shadow duration-300 hover:shadow-lg">
           <CardHeader>
-            <div className="flex items-start gap-4 px-[0px] py-[5px]">
-              <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
-                <Activity className="w-5 h-5 text-orange-600" />
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100">
+                <Activity className="h-5 w-5 text-orange-600" />
               </div>
               <div className="flex-1">
-                <CardTitle className="text-base">TB Symptom Monitor</CardTitle>
-                <CardDescription className="mt-1">
-                  Track TB symptoms and medication side effects for early intervention
-                </CardDescription>
-                <Button 
-                  variant="outline" 
-                  className="mt-3"
-                  onClick={() => onViewChange('symptoms')}
-                >
-                  Check Symptoms
+                <CardTitle className="text-base">TB symptom monitor</CardTitle>
+                <CardDescription className="mt-1">Track TB symptoms and medication side effects for early intervention</CardDescription>
+                <Button variant="outline" className="mt-3" onClick={() => onViewChange('symptoms')}>
+                  Check symptoms
                 </Button>
               </div>
             </div>
           </CardHeader>
         </Card>
 
-        {/* Treatment Info Card */}
-        <Card className="border-blue-200 bg-blue-50/50 shadow-md hover:shadow-lg transition-shadow duration-300">
-          <CardHeader>
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                <AlertCircle className="w-5 h-5 text-blue-600" />
-              </div>
-              <div className="flex-1">
-                <CardTitle className="text-base">Treatment Reminder</CardTitle>
-                <CardDescription className="mt-1">
-                  <strong>Remember:</strong> Complete your full 6-month TB treatment course. Stopping early can lead to drug-resistant TB. Take all medications together as prescribed by your doctor.
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-        </Card>
-
-        {/* Test Alarm Button (for demo) */}
         {onTriggerAlarm && (
-          <Card className="border-primary/20 bg-primary/5 shadow-md hover:shadow-lg transition-shadow duration-300">
+          <Card className="border-primary/20 bg-primary/5 shadow-md transition-shadow duration-300 hover:shadow-lg">
             <CardContent className="pt-6">
-              <Button 
-                onClick={() => onTriggerAlarm({
-                  id: 'test-alarm',
-                  medicationName: 'Rifampicin + Isoniazid',
-                  time: '08:00 AM',
-                  dosage: '2 tablets'
-                })}
+              <Button
+                onClick={() =>
+                  onTriggerAlarm({
+                    id: 'test-alarm',
+                    medicationName: 'Rifampicin + Isoniazid',
+                    time: '08:00 AM',
+                    dosage: '2 tablets',
+                  })
+                }
                 className="w-full"
               >
-                <Clock className="w-4 h-4 mr-2" />
-                Test Medication Alarm
+                <Clock className="mr-2 h-4 w-4" />
+                Test medication alarm
               </Button>
-              <p className="text-xs text-muted-foreground text-center mt-2">
-                Demo: Simulate an alarm notification
-              </p>
+              <p className="mt-2 text-center text-xs text-muted-foreground">Demo: simulate an alarm notification</p>
             </CardContent>
           </Card>
         )}

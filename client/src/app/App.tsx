@@ -11,7 +11,34 @@ import { ChatbotPage } from './components/ChatbotPage';
 import { SymptomsPage } from './components/SymptomsPage';
 import { AdminPortal } from './components/AdminPortal';
 import { AlarmNotificationScreen } from './components/AlarmNotificationScreen';
+import { Button } from './components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
+import { ShieldAlert } from 'lucide-react';
 import { Toaster } from './components/ui/sonner';
+
+function AdminAccessDenied({ onReturnHome }: { onReturnHome: () => void }) {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center px-6 py-10">
+      <Card className="w-full max-w-xl border-primary/20 shadow-2xl overflow-hidden">
+        <div className="h-2 bg-gradient-to-r from-primary via-cyan-500 to-teal-400" />
+        <CardHeader className="text-center pt-8">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <ShieldAlert className="h-8 w-8" />
+          </div>
+          <CardTitle className="text-2xl">Admin access required</CardTitle>
+          <CardDescription className="max-w-md mx-auto">
+            This area is reserved for administrators only. User management, role changes, and audit logs are protected.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pb-8 flex justify-center">
+          <Button onClick={onReturnHome} className="bg-primary hover:bg-primary/90">
+            Return to dashboard
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 function AppContent() {
   const { user } = useAuth();
@@ -26,10 +53,18 @@ function AppContent() {
 
   // Automatically redirect admins to admin portal
   useEffect(() => {
-    if (user?.role === 'admin' && currentView === 'dashboard') {
-      setCurrentView('admin');
+    if (!user) {
+      setCurrentView('dashboard');
+      setActiveAlarm(null);
+      return;
     }
-  }, [user?.role, currentView]);
+
+    if (user.role === 'admin') {
+      setCurrentView('admin');
+    } else {
+      setCurrentView('dashboard');
+    }
+  }, [user?.id, user?.role]);
 
   const handleAlarmComplete = (photoUrl: string, videoUrl: string) => {
     // In a real app, this would save to the dose log
@@ -71,14 +106,18 @@ function AppContent() {
       case 'symptoms':
         return <SymptomsPage />;
       case 'admin':
-        return user.role === 'admin' ? <AdminPortal /> : <Dashboard onViewChange={setCurrentView} />;
+        return user.role === 'admin' ? (
+          <AdminPortal />
+        ) : (
+          <AdminAccessDenied onReturnHome={() => setCurrentView('dashboard')} />
+        );
       default:
         return <Dashboard onViewChange={setCurrentView} />;
     }
   };
 
   return (
-    <div className={`min-h-screen bg-background ${currentView !== 'admin' ? 'pb-16' : ''}`}>
+    <div className="min-h-screen bg-background">
       {currentView !== 'admin' && (
         <Navigation currentView={currentView} onViewChange={setCurrentView} />
       )}
