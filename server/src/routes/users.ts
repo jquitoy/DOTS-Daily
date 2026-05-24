@@ -1,0 +1,257 @@
+import { Router } from 'express';
+import { randomUUID } from 'crypto';
+import { query } from '../db.js';
+import { hashPassword } from '../utils/hash.js';
+import { requireAuth, requireRole, AuthRequest } from '../middleware/auth.js';
+import { SanitizedUser, UserRole, UserStatus, UserRow } from '../types.js';
+
+const router = Router();
+
+function sanitizeUser(row: UserRow): SanitizedUser {
+  return {
+    id: row.id,
+    email: row.email,
+    firstName: row.first_name,
+    middleName: row.middle_name ?? undefined,
+    lastName: row.last_name,
+    nameSuffix: row.name_suffix ?? undefined,
+    role: row.role,
+    status: row.status,
+    avatarUrl: row.avatar_url ?? undefined,
+    phone: row.phone ?? undefined,
+    dateOfBirth: row.date_of_birth ?? undefined,
+    emergencyContact: row.emergency_contact ?? undefined,
+    notes: row.notes ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lastLoginAt: row.last_login_at ?? undefined,
+  };
+}
+
+router.use(requireAuth);
+
+router.get('/', requireRole('admin'), async (req, res) => {
+  const rows = await query<UserRow[]>('SELECT * FROM users ORDER BY created_at DESC');
+  res.json({ users: rows.map(sanitizeUser) });
+});
+
+router.get('/:id', async (req: AuthRequest, res) => {
+  const { id } = req.params;
+  if (!req.user) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  if (req.user.role !== 'admin' && req.user.id !== id) {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
+
+  const rows = await query<UserRow[]>('SELECT * FROM users WHERE id = ?', [id]);
+  const user = rows[0];
+  if (!user) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+
+  res.json({ user: sanitizeUser(user) });
+});
+
+router.post('/', requireRole('admin'), async (req, res) => {
+  const {
+    email,
+    password,
+    firstName,
+    lastName,
+    middleName,
+    nameSuffix,
+    role,
+    status,
+    avatarUrl,
+    phone,
+    dateOfBirth,
+    emergencyContact,
+    notes,
+  } = req.body as Record<string, any>;
+
+  if (!email || !password || !firstName || !lastName || !role || !status) {
+    return res.status(400).json({ message: 'Missing required user fields' });
+  }
+
+  if (!['user', 'admin'].includes(role) || !['active', 'inactive'].includes(status)) {
+    return res.status(400).json({ message: 'Invalid role or status' });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const existing = await query<UserRow[]>('SELECT id FROM users WHERE email = ?', [normalizedEmail]);
+  if (existing.length > 0) {
+    return res.status(409).json({ message: 'Email already in use' });
+  }
+
+  const passwordHash = await hashPassword(password.trim());
+  const userId = randomUUID();
+  const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+  await query(
+    `INSERT INTO users
+      (id, email, password_hash, first_name, middle_name, last_name, name_suffix, role, status, avatar_url, phone, date_of_birth, emergency_contact, notes, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      userId,
+      normalizedEmail,
+      passwordHash,
+      firstName.trim(),
+      middleName?.trim() || null,
+      lastName.trim(),
+      nameSuffix?.trim() || null,
+      role as UserRole,
+      status as UserStatus,
+      avatarUrl?.trim() || null,
+      phone?.trim() || null,
+      dateOfBirth || null,
+      emergencyContact?.trim() || null,
+      notes?.trim() || null,
+      now,
+      now,
+    ],
+  );
+
+  res.status(201).json({ user: sanitizeUser({
+    id: userId,
+    email: normalizedEmail,
+    password_hash: passwordHash,
+    first_name: firstName.trim(),
+    middle_name: middleName?.trim() || null,
+    last_name: lastName.trim(),
+    name_suffix: nameSuffix?.trim() || null,
+    role: role as UserRole,
+    status: status as UserStatus,
+    avatar_url: avatarUrl?.trim() || null,
+    phone: phone?.trim() || null,
+    date_of_birth: dateOfBirth || null,
+    emergency_contact: emergencyContact?.trim() || null,
+    notes: notes?.trim() || null,
+    created_at: now,
+    updated_at: now,
+    last_login_at: null,
+  }) });
+});
+
+router.put('/:id', requireRole('admin'), async (req, res) => {
+  const { id } = req.params;
+  const {
+    email,
+    firstName,
+    lastName,
+    middleName,
+    nameSuffix,
+    role,
+    status,
+    avatarUrl,
+    phone,
+    dateOfBirth,
+    emergencyContact,
+    notes,
+    password,
+  } = req.body as Record<string, any>;
+
+  const rows = await query<UserRow[]>('SELECT * FROM users WHERE id = ?', [id]);
+  const user = rows[0];
+  if (!user) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+
+  const updates: string[] = [];
+  const params: any[] = [];
+
+  if (email) {
+    updates.push('email = ?');
+    params.push(email.trim().toLowerCase());
+  }
+  if (firstName) {
+    updates.push('first_name = ?');
+    params.push(firstName.trim());
+  }
+  if (middleName !== undefined) {
+    updates.push('middle_name = ?');
+    params.push(middleName?.trim() || null);
+  }
+  if (lastName) {
+    updates.push('last_name = ?');
+    params.push(lastName.trim());
+  }
+  if (nameSuffix !== undefined) {
+    updates.push('name_suffix = ?');
+    params.push(nameSuffix?.trim() || null);
+  }
+  if (role) {
+    if (!['user', 'admin'].includes(role)) {
+      return res.status(400).json({ message: 'Invalid role' });
+    }
+    updates.push('role = ?');
+    params.push(role);
+  }
+  if (status) {
+    if (!['active', 'inactive'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status' });
+    }
+    updates.push('status = ?');
+    params.push(status);
+  }
+  if (avatarUrl !== undefined) {
+    updates.push('avatar_url = ?');
+    params.push(avatarUrl?.trim() || null);
+  }
+  if (phone !== undefined) {
+    updates.push('phone = ?');
+    params.push(phone?.trim() || null);
+  }
+  if (dateOfBirth !== undefined) {
+    updates.push('date_of_birth = ?');
+    params.push(dateOfBirth || null);
+  }
+  if (emergencyContact !== undefined) {
+    updates.push('emergency_contact = ?');
+    params.push(emergencyContact?.trim() || null);
+  }
+  if (notes !== undefined) {
+    updates.push('notes = ?');
+    params.push(notes?.trim() || null);
+  }
+  if (password) {
+    const passwordHash = await hashPassword(password.trim());
+    updates.push('password_hash = ?');
+    params.push(passwordHash);
+  }
+
+  if (updates.length === 0) {
+    return res.status(400).json({ message: 'No data to update' });
+  }
+
+  params.push(new Date().toISOString().slice(0, 19).replace('T', ' '));
+  params.push(id);
+
+  const sql = `UPDATE users SET ${updates.join(', ')}, updated_at = ? WHERE id = ?`;
+  await query(sql, params);
+
+  const updatedRows = await query<UserRow[]>('SELECT * FROM users WHERE id = ?', [id]);
+  const updated = updatedRows[0];
+  res.json({ user: sanitizeUser(updated) });
+});
+
+router.delete('/:id', requireRole('admin'), async (req: AuthRequest, res) => {
+  const { id } = req.params;
+  if (!req.user) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+  if (req.user.id === id) {
+    return res.status(400).json({ message: 'Admin cannot delete themselves' });
+  }
+
+  const rows = await query<UserRow[]>('SELECT id FROM users WHERE id = ?', [id]);
+  if (rows.length === 0) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+
+  await query('DELETE FROM users WHERE id = ?', [id]);
+  res.status(204).send();
+});
+
+export default router;

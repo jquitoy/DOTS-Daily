@@ -1,10 +1,4 @@
-import React, {
-  createContext,
-  ReactNode,
-  useContext,
-  useEffect,
-  useState,
-} from 'react';
+import { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
 import {
   formatPersonName,
   isPersonNameValid,
@@ -13,6 +7,7 @@ import {
   PersonNameInput,
   resolvePersonName,
 } from '../lib/personName';
+import { setToken, getToken, loginApi, signupApi, meApi, getUsersApi, getAuthLogsApi, createUserApi, updateUserApi, deleteUserApi, updateProfileApi } from '../lib/api';
 
 type UserRole = 'user' | 'admin';
 type UserStatus = 'active' | 'inactive';
@@ -90,68 +85,9 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-const USER_STORAGE_KEY = 'doti_users';
 const SESSION_STORAGE_KEY = 'doti_user';
-const LOG_STORAGE_KEY = 'doti_auth_logs';
 
-const seedUsers: StoredUser[] = [
-  {
-    id: '1',
-    email: 'user@doti.com',
-    firstName: 'Jane',
-    lastName: 'Smith',
-    role: 'user',
-    status: 'active',
-    phone: '+1 (555) 123-4567',
-    dateOfBirth: '1990-05-15',
-    emergencyContact: '+1 (555) 987-6543',
-    password: 'password123',
-    createdAt: '2026-01-01T09:00:00.000Z',
-    updatedAt: '2026-01-15T10:00:00.000Z',
-    lastLoginAt: '2026-01-15T08:00:00.000Z',
-    notes: 'Weekly progress reviews',
-  },
-  {
-    id: '2',
-    email: 'admin@doti.com',
-    firstName: 'Admin',
-    lastName: 'User',
-    role: 'admin',
-    status: 'active',
-    password: 'admin123',
-    createdAt: '2026-01-01T09:00:00.000Z',
-    updatedAt: '2026-01-15T10:00:00.000Z',
-    lastLoginAt: '2026-01-15T08:30:00.000Z',
-    notes: 'Primary portal administrator',
-  },
-  {
-    id: '3',
-    email: 'mary.j@email.com',
-    firstName: 'Mary',
-    lastName: 'Johnson',
-    role: 'user',
-    status: 'active',
-    phone: '+1 (555) 123-4568',
-    password: 'mary123',
-    createdAt: '2026-01-03T09:15:00.000Z',
-    updatedAt: '2026-01-15T11:00:00.000Z',
-    lastLoginAt: '2026-01-15T07:30:00.000Z',
-  },
-  {
-    id: '4',
-    email: 'inactive.patient@email.com',
-    firstName: 'Robert',
-    lastName: 'Brown',
-    role: 'user',
-    status: 'inactive',
-    phone: '+1 (555) 123-4569',
-    password: 'robert123',
-    createdAt: '2026-01-04T10:00:00.000Z',
-    updatedAt: '2026-01-14T08:45:00.000Z',
-    lastLoginAt: '2026-01-12T10:00:00.000Z',
-    notes: 'Temporarily suspended while records are reviewed',
-  },
-];
+// Backend-driven auth: users and logs are fetched from API when authenticated.
 
 function generateId() {
   return (
@@ -210,68 +146,74 @@ function stripPassword(user: StoredUser): AdminUser {
   return publicUser;
 }
 
-function seedOrStoredUsers(): StoredUser[] {
-  const stored = safeJsonParse<StoredUser[] | null>(
-    localStorage.getItem(USER_STORAGE_KEY),
-    null,
-  );
-  if (Array.isArray(stored) && stored.length > 0) {
-    return stored.map((user) => normalizeUser(user));
-  }
-
-  return seedUsers;
-}
-
 function seedOrStoredLogs(): AuthLog[] {
   const stored = safeJsonParse<AuthLog[] | null>(
-    localStorage.getItem(LOG_STORAGE_KEY),
+    localStorage.getItem(SESSION_STORAGE_KEY),
     null,
   );
-  if (Array.isArray(stored)) {
-    return stored;
-  }
-
   return [];
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [storedUsers, setStoredUsers] =
-    useState<StoredUser[]>(seedOrStoredUsers);
-  const [authLogs, setAuthLogs] = useState<AuthLog[]>(seedOrStoredLogs);
+  const [storedUsers, setStoredUsers] = useState<StoredUser[]>([]);
+  const [authLogs, setAuthLogs] = useState<AuthLog[]>([]);
   const [user, setUser] = useState<User | null>(null);
 
   const users = storedUsers.map(stripPassword);
 
   useEffect(() => {
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(storedUsers));
-  }, [storedUsers]);
+    const token = getToken();
+    if (!token) return;
+
+    (async () => {
+      try {
+        const resp = await meApi();
+        setUser(resp.user as User);
+      } catch {
+        setToken(null);
+        setUser(null);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
-    localStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(authLogs));
-  }, [authLogs]);
-
-  useEffect(() => {
-    const storedSession = safeJsonParse<User | null>(
-      localStorage.getItem(SESSION_STORAGE_KEY),
-      null,
-    );
-
-    if (!storedSession) {
+    if (user?.role !== 'admin') {
+      setStoredUsers([]);
+      setAuthLogs([]);
       return;
     }
 
-    const existingUser = storedUsers.find(
-      (candidate) =>
-        candidate.id === storedSession.id ||
-        candidate.email === storedSession.email,
-    );
+    (async () => {
+      try {
+        const usersResp = await getUsersApi();
+        const mappedUsers = (usersResp.users || []).map((u: any) => ({
+          id: u.id,
+          email: u.email,
+          firstName: u.firstName || u.first_name || '',
+          middleName: u.middleName || u.middle_name || undefined,
+          lastName: u.lastName || u.last_name || '',
+          suffix: u.nameSuffix || u.suffix || undefined,
+          role: u.role || 'user',
+          status: u.status || 'active',
+          avatarUrl: u.avatarUrl || u.avatar_url || undefined,
+          avatar: u.avatar || undefined,
+          phone: u.phone || undefined,
+          dateOfBirth: u.dateOfBirth || u.date_of_birth || undefined,
+          emergencyContact: u.emergencyContact || u.emergency_contact || undefined,
+          notes: u.notes || undefined,
+          createdAt: u.createdAt || u.created_at || new Date().toISOString(),
+          updatedAt: u.updatedAt || u.updated_at || new Date().toISOString(),
+          lastLoginAt: u.lastLoginAt || u.last_login_at || undefined,
+        })) as StoredUser[];
+        setStoredUsers(mappedUsers);
 
-    if (existingUser && existingUser.status === 'active') {
-      setUser(stripPassword(existingUser));
-    } else {
-      localStorage.removeItem(SESSION_STORAGE_KEY);
-    }
-  }, [storedUsers]);
+        const logsResp = await getAuthLogsApi();
+        setAuthLogs(logsResp.authLogs || []);
+      } catch (err) {
+        console.error('Failed to load admin data:', err);
+      }
+    })();
+  }, [user?.role]);
 
   useEffect(() => {
     if (user) {
@@ -280,26 +222,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(SESSION_STORAGE_KEY);
     }
   }, [user]);
-
-  useEffect(() => {
-    if (!user) {
-      return;
-    }
-
-    const currentRecord = storedUsers.find(
-      (candidate) => candidate.id === user.id,
-    );
-    if (!currentRecord) {
-      setUser(null);
-      localStorage.removeItem(SESSION_STORAGE_KEY);
-      return;
-    }
-
-    const updatedSession = stripPassword(currentRecord);
-    if (JSON.stringify(updatedSession) !== JSON.stringify(user)) {
-      setUser(updatedSession);
-    }
-  }, [storedUsers, user]);
 
   const appendLog = (entry: Omit<AuthLog, 'id' | 'timestamp'>) => {
     const timestamp = new Date().toISOString();
@@ -330,44 +252,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    try {
+      const resp = await loginApi(email.trim().toLowerCase(), password);
+      const { token, user: respUser } = resp;
+      setToken(token);
+      setUser(respUser);
 
-    const normalizedEmail = email.trim().toLowerCase();
-    const matchedUser = storedUsers.find(
-      (candidate) => candidate.email.toLowerCase() === normalizedEmail,
-    );
+      if (respUser.role === 'admin') {
+        const usersResp = await getUsersApi();
+        setStoredUsers(usersResp.users || []);
+        const logsResp = await getAuthLogsApi();
+        setAuthLogs(logsResp.authLogs || []);
+      }
 
-    if (
-      !matchedUser ||
-      matchedUser.password !== password ||
-      matchedUser.status !== 'active'
-    ) {
+      return true;
+    } catch (err) {
       return false;
     }
-
-    const now = new Date().toISOString();
-    const updatedUser: StoredUser = {
-      ...matchedUser,
-      lastLoginAt: now,
-      updatedAt: now,
-    };
-
-    setStoredUsers((currentUsers) =>
-      currentUsers.map((candidate) =>
-        candidate.id === matchedUser.id ? updatedUser : candidate,
-      ),
-    );
-    setUser(stripPassword(updatedUser));
-    appendLog({
-      type: 'login',
-      userId: matchedUser.id,
-      name: formatPersonName(matchedUser),
-      email: matchedUser.email,
-      role: matchedUser.role,
-      note: 'Successful login',
-    });
-
-    return true;
   };
 
   const signup = async (
@@ -375,46 +276,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string,
     name: PersonNameInput,
   ): Promise<boolean> => {
-    await new Promise((resolve) => setTimeout(resolve, 400));
-
-    const normalizedEmail = email.trim().toLowerCase();
-    if (
-      storedUsers.some(
-        (candidate) => candidate.email.toLowerCase() === normalizedEmail,
-      )
-    ) {
+    try {
+      const payload = {
+        email: email.trim().toLowerCase(),
+        password,
+        firstName: name.firstName,
+        lastName: name.lastName,
+        middleName: name.middleName,
+        nameSuffix: name.suffix,
+      };
+      const resp = await signupApi(payload);
+      setToken(resp.token);
+      setUser(resp.user);
+      return true;
+    } catch (err) {
       return false;
     }
-
-    if (!isPersonNameValid(name)) {
-      return false;
-    }
-
-    const now = new Date().toISOString();
-    const newStoredUser = normalizeUser({
-      id: generateId(),
-      email: normalizedEmail,
-      ...normalizePersonNameInput(name),
-      role: 'user',
-      status: 'active',
-      password,
-      createdAt: now,
-      updatedAt: now,
-      lastLoginAt: now,
-    });
-
-    setStoredUsers((currentUsers) => [...currentUsers, newStoredUser]);
-    setUser(stripPassword(newStoredUser));
-    appendLog({
-      type: 'signup',
-      userId: newStoredUser.id,
-      name: formatPersonName(newStoredUser),
-      email: newStoredUser.email,
-      role: newStoredUser.role,
-      note: 'New account created through signup',
-    });
-
-    return true;
   };
 
   const logout = () => {
@@ -428,182 +305,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         note: 'User logged out',
       });
     }
-
     setUser(null);
-    localStorage.removeItem(SESSION_STORAGE_KEY);
+    setToken(null);
   };
 
   const updateProfile = (updates: Partial<User>) => {
-    if (!user) {
-      return;
-    }
-
-    const existingRecord = storedUsers.find(
-      (candidate) => candidate.id === user.id,
-    );
-    if (!existingRecord) {
-      return;
-    }
-
-    const nextEmail =
-      updates.email?.trim().toLowerCase() ?? existingRecord.email;
-    const duplicateEmail = storedUsers.some(
-      (candidate) =>
-        candidate.id !== existingRecord.id &&
-        candidate.email.toLowerCase() === nextEmail,
-    );
-
-    if (duplicateEmail) {
-      return;
-    }
-
-    const now = new Date().toISOString();
-    const updatedRecord = normalizeUser({
-      ...existingRecord,
-      ...updates,
-      email: nextEmail,
-      updatedAt: now,
-      password: existingRecord.password,
-    });
-
-    setStoredUsers((currentUsers) =>
-      currentUsers.map((candidate) =>
-        candidate.id === existingRecord.id ? updatedRecord : candidate,
-      ),
-    );
-    setUser(stripPassword(updatedRecord));
+    if (!user) return;
+    (async () => {
+      try {
+        const resp = await updateProfileApi(updates);
+        setUser(resp.user);
+      } catch (err) {
+        // ignore
+      }
+    })();
   };
 
   const createUser = (input: CreateUserInput): boolean => {
-    if (!user || user.role !== 'admin') {
-      return false;
-    }
-
-    const normalizedEmail = input.email.trim().toLowerCase();
-    if (
-      !normalizedEmail ||
-      !isPersonNameValid(input) ||
-      !input.password.trim()
-    ) {
-      return false;
-    }
-
-    if (
-      storedUsers.some(
-        (candidate) => candidate.email.toLowerCase() === normalizedEmail,
-      )
-    ) {
-      return false;
-    }
-
-    const now = new Date().toISOString();
-    const newUser = normalizeUser({
-      id: generateId(),
-      email: normalizedEmail,
-      ...normalizePersonNameInput(input),
-      role: input.role,
-      status: input.status ?? 'active',
-      phone: input.phone?.trim() || undefined,
-      dateOfBirth: input.dateOfBirth?.trim() || undefined,
-      emergencyContact: input.emergencyContact?.trim() || undefined,
-      notes: input.notes?.trim() || undefined,
-      password: input.password,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    setStoredUsers((currentUsers) => [...currentUsers, newUser]);
-    appendLog({
-      type: 'user-created',
-      userId: newUser.id,
-      name: formatPersonName(newUser),
-      email: newUser.email,
-      role: newUser.role,
-      performedBy: user.email,
-      note: `Created by ${formatPersonName(user)}`,
-    });
-
+    if (!user || user.role !== 'admin') return false;
+    (async () => {
+      try {
+        await createUserApi(input);
+        const usersResp = await getUsersApi();
+        setStoredUsers(usersResp.users || []);
+      } catch (err) {
+        // ignore
+      }
+    })();
     return true;
   };
 
   const updateUser = (id: string, updates: UpdateUserInput): boolean => {
-    if (!user || user.role !== 'admin') {
-      return false;
-    }
-
-    const currentRecord = storedUsers.find((candidate) => candidate.id === id);
-    if (!currentRecord) {
-      return false;
-    }
-
-    const nextEmail =
-      updates.email?.trim().toLowerCase() ?? currentRecord.email;
-    const duplicateEmail = storedUsers.some(
-      (candidate) =>
-        candidate.id !== id && candidate.email.toLowerCase() === nextEmail,
-    );
-
-    if (duplicateEmail) {
-      return false;
-    }
-
-    const now = new Date().toISOString();
-    const updatedRecord = normalizeUser({
-      ...currentRecord,
-      ...updates,
-      email: nextEmail,
-      password: updates.password?.trim()
-        ? updates.password
-        : currentRecord.password,
-      updatedAt: now,
-    });
-
-    setStoredUsers((currentUsers) =>
-      currentUsers.map((candidate) =>
-        candidate.id === id ? updatedRecord : candidate,
-      ),
-    );
-
-    if (user.id === id) {
-      setUser(stripPassword(updatedRecord));
-    }
-
-    appendLog({
-      type: 'user-updated',
-      userId: updatedRecord.id,
-      name: formatPersonName(updatedRecord),
-      email: updatedRecord.email,
-      role: updatedRecord.role,
-      performedBy: user.email,
-      note: `Updated by ${formatPersonName(user)}`,
-    });
-
+    if (!user || user.role !== 'admin') return false;
+    (async () => {
+      try {
+        await updateUserApi(id, updates);
+        const usersResp = await getUsersApi();
+        setStoredUsers(usersResp.users || []);
+      } catch (err) {
+        // ignore
+      }
+    })();
     return true;
   };
 
   const deleteUser = (id: string): boolean => {
-    if (!user || user.role !== 'admin') {
-      return false;
-    }
-
-    const currentRecord = storedUsers.find((candidate) => candidate.id === id);
-    if (!currentRecord || currentRecord.id === user.id) {
-      return false;
-    }
-
-    setStoredUsers((currentUsers) =>
-      currentUsers.filter((candidate) => candidate.id !== id),
-    );
-    appendLog({
-      type: 'user-deleted',
-      userId: currentRecord.id,
-      name: formatPersonName(currentRecord),
-      email: currentRecord.email,
-      role: currentRecord.role,
-      performedBy: user.email,
-      note: `Deleted by ${formatPersonName(user)}`,
-    });
-
+    if (!user || user.role !== 'admin') return false;
+    if (user.id === id) return false;
+    (async () => {
+      try {
+        await deleteUserApi(id);
+        const usersResp = await getUsersApi();
+        setStoredUsers(usersResp.users || []);
+      } catch (err) {
+        // ignore
+      }
+    })();
     return true;
   };
 

@@ -191,22 +191,22 @@ export function AdminPortal() {
     const displayName = formatPersonName(candidate).toLowerCase();
     return (
       displayName.includes(query) ||
-      candidate.firstName.toLowerCase().includes(query) ||
+      (candidate.firstName ?? '').toLowerCase().includes(query) ||
       (candidate.middleName ?? '').toLowerCase().includes(query) ||
-      candidate.lastName.toLowerCase().includes(query) ||
+      (candidate.lastName ?? '').toLowerCase().includes(query) ||
       (candidate.suffix ?? '').toLowerCase().includes(query) ||
-      candidate.email.toLowerCase().includes(query) ||
-      candidate.role.toLowerCase().includes(query) ||
-      candidate.status.toLowerCase().includes(query)
+      (candidate.email ?? '').toLowerCase().includes(query) ||
+      (candidate.role ?? '').toLowerCase().includes(query) ||
+      (candidate.status ?? '').toLowerCase().includes(query)
     );
   });
 
   const filteredLogs = authLogs.filter((entry) => {
     const query = searchQuery.toLowerCase();
     return (
-      entry.name.toLowerCase().includes(query) ||
-      entry.email.toLowerCase().includes(query) ||
-      entry.type.toLowerCase().includes(query) ||
+      (entry.name ?? '').toLowerCase().includes(query) ||
+      (entry.email ?? '').toLowerCase().includes(query) ||
+      (entry.type ?? '').toLowerCase().includes(query) ||
       (entry.performedBy ?? '').toLowerCase().includes(query)
     );
   });

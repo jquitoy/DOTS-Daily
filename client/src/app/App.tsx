@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { MedicationsProvider } from './contexts/MedicationsContext';
 import { LoginPage } from './components/LoginPage';
@@ -21,6 +21,13 @@ import {
 } from './components/ui/card';
 import { ShieldAlert } from 'lucide-react';
 import { Toaster } from './components/ui/sonner';
+import {
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom';
 
 function AdminAccessDenied({ onReturnHome }: { onReturnHome: () => void }) {
   return (
@@ -50,34 +57,84 @@ function AdminAccessDenied({ onReturnHome }: { onReturnHome: () => void }) {
   );
 }
 
+function ProtectedRoute({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function AdminRoute({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user.role !== 'admin') {
+    return (
+      <AdminAccessDenied onReturnHome={() => navigate('/dashboard')} />
+    );
+  }
+
+  return <>{children}</>;
+}
+
 function AppContent() {
   const { user } = useAuth();
-  const [authView, setAuthView] = useState<'login' | 'signup'>('login');
-  const [currentView, setCurrentView] = useState('dashboard');
   const [activeAlarm, setActiveAlarm] = useState<{
     id: string;
     medicationName: string;
     time: string;
     dosage: string;
   } | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  // Automatically redirect admins to admin portal
+  const getCurrentView = () => {
+    if (location.pathname.startsWith('/medications')) return 'medications';
+    if (location.pathname.startsWith('/chatbot')) return 'chatbot';
+    if (location.pathname.startsWith('/symptoms')) return 'symptoms';
+    if (location.pathname.startsWith('/profile')) return 'profile';
+    if (location.pathname === '/admin') return 'admin';
+    return 'dashboard';
+  };
+
+  const currentView = getCurrentView();
+
+  const viewToPath = (view: string) => {
+    switch (view) {
+      case 'dashboard':
+        return '/dashboard';
+      case 'profile':
+        return '/profile';
+      case 'medications':
+        return '/medications';
+      case 'chatbot':
+        return '/chatbot';
+      case 'symptoms':
+        return '/symptoms';
+      default:
+        return '/dashboard';
+    }
+  };
+
   useEffect(() => {
-    if (!user) {
-      setCurrentView('dashboard');
-      setActiveAlarm(null);
+    if (!user && !['/login', '/signup'].includes(location.pathname)) {
+      navigate('/login', { replace: true });
       return;
     }
 
-    if (user.role === 'admin') {
-      setCurrentView('admin');
-    } else {
-      setCurrentView('dashboard');
+    if (user && ['/login', '/signup', '/'].includes(location.pathname)) {
+      navigate(user.role === 'admin' ? '/admin' : '/dashboard', { replace: true });
     }
-  }, [user?.id, user?.role]);
+  }, [user, location.pathname, navigate]);
 
   const handleAlarmComplete = (photoUrl: string, videoUrl: string) => {
-    // In a real app, this would save to the dose log
     console.log('Dose completed:', { alarm: activeAlarm, photoUrl, videoUrl });
     setActiveAlarm(null);
   };
@@ -86,59 +143,94 @@ function AppContent() {
     setActiveAlarm(null);
   };
 
-  // Show auth screens if not logged in
-  if (!user) {
-    return (
-      <>
-        {authView === 'login' ? (
-          <LoginPage onSwitchToSignup={() => setAuthView('signup')} />
-        ) : (
-          <SignupPage onSwitchToLogin={() => setAuthView('login')} />
-        )}
-        <Toaster />
-      </>
-    );
-  }
-
-  // Render current view
-  const renderView = () => {
-    switch (currentView) {
-      case 'dashboard':
-        return (
-          <Dashboard
-            onViewChange={setCurrentView}
-            onTriggerAlarm={setActiveAlarm}
-          />
-        );
-      case 'profile':
-        return <ProfilePage onViewChange={setCurrentView} />;
-      case 'medications':
-      case 'alarms':
-      case 'dose-log':
-        return <MedicationsHub />;
-      case 'chatbot':
-        return <ChatbotPage />;
-      case 'symptoms':
-        return <SymptomsPage />;
-      case 'admin':
-        return user.role === 'admin' ? (
-          <AdminPortal />
-        ) : (
-          <AdminAccessDenied onReturnHome={() => setCurrentView('dashboard')} />
-        );
-      default:
-        return <Dashboard onViewChange={setCurrentView} />;
-    }
-  };
-
   return (
     <div className="min-h-screen bg-background">
-      {currentView !== 'admin' && (
-        <Navigation currentView={currentView} onViewChange={setCurrentView} />
+      {user && location.pathname !== '/admin' && (
+        <Navigation
+          currentView={currentView}
+          onViewChange={(view) => navigate(viewToPath(view))}
+        />
       )}
-      {renderView()}
 
-      {/* Alarm Notification Screen */}
+      <Routes>
+        <Route
+          path="/login"
+          element={<LoginPage onSwitchToSignup={() => navigate('/signup')} />}
+        />
+        <Route
+          path="/signup"
+          element={<SignupPage onSwitchToLogin={() => navigate('/login')} />}
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard onViewChange={() => navigate('/dashboard')} onTriggerAlarm={setActiveAlarm} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <ProfilePage onViewChange={() => navigate('/profile')} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/medications"
+          element={
+            <ProtectedRoute>
+              <MedicationsHub />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/chatbot"
+          element={
+            <ProtectedRoute>
+              <ChatbotPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/symptoms"
+          element={
+            <ProtectedRoute>
+              <SymptomsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminPortal />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/"
+          element={
+            user ? (
+              <Navigate to={user.role === 'admin' ? '/admin' : '/dashboard'} replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
+          path="*"
+          element={
+            user ? (
+              <Navigate to={user.role === 'admin' ? '/admin' : '/dashboard'} replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+      </Routes>
+
       {activeAlarm && (
         <AlarmNotificationScreen
           alarm={activeAlarm}
