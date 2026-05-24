@@ -8,6 +8,31 @@ import { SanitizedUser, TokenPayload, UserRole, UserRow } from '../types.js';
 
 const router = Router();
 
+function toDateOnly(value: unknown): string | undefined {
+  if (value === null || value === undefined || value === '') return undefined;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    const isoMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})T/);
+    if (isoMatch) return isoMatch[1];
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) {
+      const year = parsed.getFullYear();
+      const month = String(parsed.getMonth() + 1).padStart(2, '0');
+      const day = String(parsed.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  }
+  return undefined;
+}
+
 function sanitizeUser(row: UserRow): SanitizedUser {
   return {
     id: row.id,
@@ -20,13 +45,43 @@ function sanitizeUser(row: UserRow): SanitizedUser {
     status: row.status,
     avatarUrl: row.avatar_url ?? undefined,
     phone: row.phone ?? undefined,
-    dateOfBirth: row.date_of_birth ?? undefined,
+    dateOfBirth: toDateOnly(row.date_of_birth),
     emergencyContact: row.emergency_contact ?? undefined,
     notes: row.notes ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastLoginAt: row.last_login_at ?? undefined,
   };
+}
+
+function buildProfileUpdateNote(before: UserRow, after: UserRow, passwordChanged: boolean): string {
+  const changedFields: string[] = [];
+  const add = (label: string, oldValue: unknown, newValue: unknown) => {
+    if ((oldValue ?? null) !== (newValue ?? null)) {
+      changedFields.push(label);
+    }
+  };
+
+  add('email', before.email, after.email);
+  add('firstName', before.first_name, after.first_name);
+  add('middleName', before.middle_name, after.middle_name);
+  add('lastName', before.last_name, after.last_name);
+  add('nameSuffix', before.name_suffix, after.name_suffix);
+  add('avatarUrl', before.avatar_url, after.avatar_url);
+  add('phone', before.phone, after.phone);
+  add('dateOfBirth', before.date_of_birth, after.date_of_birth);
+  add('emergencyContact', before.emergency_contact, after.emergency_contact);
+  add('notes', before.notes, after.notes);
+
+  if (passwordChanged) {
+    changedFields.push('password');
+  }
+
+  if (changedFields.length === 0) {
+    return 'Profile updated (no effective field changes)';
+  }
+
+  return `Profile updated. Changed: ${changedFields.join(', ')}`;
 }
 
 router.post('/login', async (req, res) => {
@@ -171,6 +226,11 @@ router.put('/profile', requireAuth, async (req: AuthRequest, res) => {
   }
 
   const { email, firstName, lastName, middleName, nameSuffix, avatarUrl, phone, dateOfBirth, emergencyContact, notes, password } = req.body as Record<string, any>;
+  const originalRows = await query<UserRow[]>('SELECT * FROM users WHERE id = ?', [req.user.id]);
+  const original = originalRows[0];
+  if (!original) {
+    return res.status(404).json({ message: 'User not found' });
+  }
   const updates: any[] = [];
   const params: any[] = [];
 
@@ -232,6 +292,7 @@ router.put('/profile', requireAuth, async (req: AuthRequest, res) => {
 
   const rows = await query<UserRow[]>('SELECT * FROM users WHERE id = ?', [req.user.id]);
   const updated = rows[0];
+  const updateNote = buildProfileUpdateNote(original, updated, Boolean(password));
 
   await createAuthLog({
     type: 'user-updated',
@@ -240,7 +301,7 @@ router.put('/profile', requireAuth, async (req: AuthRequest, res) => {
     email: updated.email,
     role: updated.role,
     performedBy: updated.email,
-    note: 'Profile updated',
+    note: updateNote,
   });
 
   res.json({ user: sanitizeUser(updated) });

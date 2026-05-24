@@ -1,4 +1,10 @@
-import { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useState,
+} from 'react';
 import {
   formatPersonName,
   isPersonNameValid,
@@ -7,7 +13,20 @@ import {
   PersonNameInput,
   resolvePersonName,
 } from '../lib/personName';
-import { setToken, getToken, loginApi, signupApi, meApi, logoutApi, getUsersApi, getAuthLogsApi, createUserApi, updateUserApi, deleteUserApi, updateProfileApi } from '../lib/api';
+import {
+  setToken,
+  getToken,
+  loginApi,
+  signupApi,
+  meApi,
+  logoutApi,
+  getUsersApi,
+  getAuthLogsApi,
+  createUserApi,
+  updateUserApi,
+  deleteUserApi,
+  updateProfileApi,
+} from '../lib/api';
 
 type UserRole = 'user' | 'admin';
 type UserStatus = 'active' | 'inactive';
@@ -104,6 +123,41 @@ function safeJsonParse<T>(value: string | null, fallback: T): T {
   }
 }
 
+function normalizeDateOnly(value: unknown): string | undefined {
+  if (value === null || value === undefined || value === '') return undefined;
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      return trimmed;
+    }
+
+    const isoMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})T/);
+    if (isoMatch) {
+      return isoMatch[1];
+    }
+
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) {
+      const year = parsed.getFullYear();
+      const month = String(parsed.getMonth() + 1).padStart(2, '0');
+      const day = String(parsed.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  }
+
+  return undefined;
+}
+
 function normalizeUser(
   user: Partial<StoredUser> & {
     email: string;
@@ -144,6 +198,23 @@ function normalizeUser(
 function stripPassword(user: StoredUser): AdminUser {
   const { password: _password, ...publicUser } = user;
   return publicUser;
+}
+
+function normalizeAuthLog(raw: any): AuthLog {
+  return {
+    id: raw.id,
+    type: raw.type,
+    userId: raw.user_id ?? raw.userId,
+    name: raw.display_name ?? raw.name ?? '',
+    email: raw.email ?? '',
+    role: raw.role ?? 'user',
+    timestamp:
+      raw.created_at && typeof raw.created_at === 'string'
+        ? new Date(raw.created_at).toISOString()
+        : (raw.timestamp ?? new Date().toISOString()),
+    performedBy: raw.performed_by ?? raw.performedBy ?? undefined,
+    note: raw.note ?? undefined,
+  };
 }
 
 function seedOrStoredLogs(): AuthLog[] {
@@ -198,8 +269,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           avatarUrl: u.avatarUrl || u.avatar_url || undefined,
           avatar: u.avatar || undefined,
           phone: u.phone || undefined,
-          dateOfBirth: u.dateOfBirth || u.date_of_birth || undefined,
-          emergencyContact: u.emergencyContact || u.emergency_contact || undefined,
+          dateOfBirth: normalizeDateOnly(u.dateOfBirth ?? u.date_of_birth),
+          emergencyContact:
+            u.emergencyContact || u.emergency_contact || undefined,
           notes: u.notes || undefined,
           createdAt: u.createdAt || u.created_at || new Date().toISOString(),
           updatedAt: u.updatedAt || u.updated_at || new Date().toISOString(),
@@ -208,7 +280,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStoredUsers(mappedUsers);
 
         const logsResp = await getAuthLogsApi();
-        setAuthLogs(logsResp.authLogs || []);
+        setAuthLogs((logsResp.authLogs || []).map(normalizeAuthLog));
       } catch (err) {
         console.error('Failed to load admin data:', err);
       }
@@ -262,7 +334,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const usersResp = await getUsersApi();
         setStoredUsers(usersResp.users || []);
         const logsResp = await getAuthLogsApi();
-        setAuthLogs(logsResp.authLogs || []);
+        setAuthLogs((logsResp.authLogs || []).map(normalizeAuthLog));
       }
 
       return true;

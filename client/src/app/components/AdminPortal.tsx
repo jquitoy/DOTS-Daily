@@ -101,6 +101,21 @@ const emptyForm = (): UserFormState => ({
   notes: '',
 });
 
+const normalizeDateInputValue = (value?: string) => {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const isoMatch = value.match(/^(\d{4}-\d{2}-\d{2})T/);
+  if (isoMatch) return isoMatch[1];
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  return '';
+};
+
 const formatDateTime = (value?: string) =>
   value
     ? new Intl.DateTimeFormat('en-US', {
@@ -111,8 +126,8 @@ const formatDateTime = (value?: string) =>
 
 const formatDate = (value?: string) =>
   value
-    ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(
-        new Date(value),
+    ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'UTC' }).format(
+        new Date(`${normalizeDateInputValue(value)}T00:00:00Z`),
       )
     : 'Not provided';
 
@@ -251,7 +266,7 @@ export function AdminPortal() {
       role: candidate.role,
       status: candidate.status,
       phone: candidate.phone ?? '',
-      dateOfBirth: candidate.dateOfBirth ?? '',
+      dateOfBirth: normalizeDateInputValue(candidate.dateOfBirth),
       emergencyContact: candidate.emergencyContact ?? '',
       notes: candidate.notes ?? '',
     });
@@ -273,7 +288,7 @@ export function AdminPortal() {
       role: candidate.role,
       status: candidate.status,
       phone: candidate.phone ?? '',
-      dateOfBirth: candidate.dateOfBirth ?? '',
+      dateOfBirth: normalizeDateInputValue(candidate.dateOfBirth),
       emergencyContact: candidate.emergencyContact ?? '',
       notes: candidate.notes ?? '',
     });
