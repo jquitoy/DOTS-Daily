@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from './ui/card';
 import { Button } from './ui/button';
+import { LogoutConfirmDialog } from './LogoutConfirmDialog';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import {
@@ -100,6 +101,21 @@ const emptyForm = (): UserFormState => ({
   notes: '',
 });
 
+const normalizeDateInputValue = (value?: string) => {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const isoMatch = value.match(/^(\d{4}-\d{2}-\d{2})T/);
+  if (isoMatch) return isoMatch[1];
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  return '';
+};
+
 const formatDateTime = (value?: string) =>
   value
     ? new Intl.DateTimeFormat('en-US', {
@@ -110,8 +126,8 @@ const formatDateTime = (value?: string) =>
 
 const formatDate = (value?: string) =>
   value
-    ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(
-        new Date(value),
+    ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'UTC' }).format(
+        new Date(`${normalizeDateInputValue(value)}T00:00:00Z`),
       )
     : 'Not provided';
 
@@ -191,22 +207,22 @@ export function AdminPortal() {
     const displayName = formatPersonName(candidate).toLowerCase();
     return (
       displayName.includes(query) ||
-      candidate.firstName.toLowerCase().includes(query) ||
+      (candidate.firstName ?? '').toLowerCase().includes(query) ||
       (candidate.middleName ?? '').toLowerCase().includes(query) ||
-      candidate.lastName.toLowerCase().includes(query) ||
+      (candidate.lastName ?? '').toLowerCase().includes(query) ||
       (candidate.suffix ?? '').toLowerCase().includes(query) ||
-      candidate.email.toLowerCase().includes(query) ||
-      candidate.role.toLowerCase().includes(query) ||
-      candidate.status.toLowerCase().includes(query)
+      (candidate.email ?? '').toLowerCase().includes(query) ||
+      (candidate.role ?? '').toLowerCase().includes(query) ||
+      (candidate.status ?? '').toLowerCase().includes(query)
     );
   });
 
   const filteredLogs = authLogs.filter((entry) => {
     const query = searchQuery.toLowerCase();
     return (
-      entry.name.toLowerCase().includes(query) ||
-      entry.email.toLowerCase().includes(query) ||
-      entry.type.toLowerCase().includes(query) ||
+      (entry.name ?? '').toLowerCase().includes(query) ||
+      (entry.email ?? '').toLowerCase().includes(query) ||
+      (entry.type ?? '').toLowerCase().includes(query) ||
       (entry.performedBy ?? '').toLowerCase().includes(query)
     );
   });
@@ -250,7 +266,7 @@ export function AdminPortal() {
       role: candidate.role,
       status: candidate.status,
       phone: candidate.phone ?? '',
-      dateOfBirth: candidate.dateOfBirth ?? '',
+      dateOfBirth: normalizeDateInputValue(candidate.dateOfBirth),
       emergencyContact: candidate.emergencyContact ?? '',
       notes: candidate.notes ?? '',
     });
@@ -272,7 +288,7 @@ export function AdminPortal() {
       role: candidate.role,
       status: candidate.status,
       phone: candidate.phone ?? '',
-      dateOfBirth: candidate.dateOfBirth ?? '',
+      dateOfBirth: normalizeDateInputValue(candidate.dateOfBirth),
       emergencyContact: candidate.emergencyContact ?? '',
       notes: candidate.notes ?? '',
     });
@@ -404,14 +420,11 @@ export function AdminPortal() {
               Logged in as{' '}
               <span className="font-semibold">{formatPersonName(user)}</span>
             </div>
-            <Button
-              variant="secondary"
-              className="border-white/30 bg-white/20 text-white backdrop-blur-sm hover:bg-white/30"
-              onClick={logout}
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Logout
-            </Button>
+            <LogoutConfirmDialog
+              onConfirm={logout}
+              buttonVariant="secondary"
+              buttonClassName="border-white/30 bg-white/20 text-white backdrop-blur-sm hover:bg-white/30"
+            />
           </div>
         </div>
       </div>
