@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from './ui/card';
 import { Button } from './ui/button';
+import { LogoutConfirmDialog } from './LogoutConfirmDialog';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import {
@@ -404,14 +405,11 @@ export function AdminPortal() {
               Logged in as{' '}
               <span className="font-semibold">{formatPersonName(user)}</span>
             </div>
-            <Button
-              variant="secondary"
-              className="border-white/30 bg-white/20 text-white backdrop-blur-sm hover:bg-white/30"
-              onClick={logout}
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Logout
-            </Button>
+            <LogoutConfirmDialog
+              onConfirm={logout}
+              buttonVariant="secondary"
+              buttonClassName="border-white/30 bg-white/20 text-white backdrop-blur-sm hover:bg-white/30"
+            />
           </div>
         </div>
       </div>

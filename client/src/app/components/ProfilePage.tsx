@@ -13,6 +13,7 @@ import {
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { User, Mail, Phone, Calendar, Shield, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
+import { LogoutConfirmDialog } from './LogoutConfirmDialog';
 import { PersonNameFields } from './PersonNameFields';
 import {
   emptyPersonName,
@@ -81,8 +82,8 @@ export function ProfilePage({ onViewChange }: ProfilePageProps) {
     setEditing(false);
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     toast.success('Logged out successfully');
   };
 
@@ -259,15 +260,11 @@ export function ProfilePage({ onViewChange }: ProfilePageProps) {
       )}
 
       {/* Logout Button */}
-      <Button
-        type="button"
-        variant="outline"
-        className="mt-6"
-        onClick={handleLogout}
-      >
-        <LogOut className="w-4 h-4 mr-2" />
-        Logout
-      </Button>
+      <LogoutConfirmDialog
+        onConfirm={handleLogout}
+        buttonVariant="outline"
+        buttonClassName="mt-6"
+      />
     </div>
   );
 }

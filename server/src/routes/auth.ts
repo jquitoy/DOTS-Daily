@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { query } from '../db.js';
 import { comparePassword, hashPassword } from '../utils/hash.js';
+import { createAuthLog } from '../utils/authLog.js';
 import { createToken, requireAuth, AuthRequest } from '../middleware/auth.js';
 import { SanitizedUser, TokenPayload, UserRole, UserRow } from '../types.js';
 
@@ -26,32 +27,6 @@ function sanitizeUser(row: UserRow): SanitizedUser {
     updatedAt: row.updated_at,
     lastLoginAt: row.last_login_at ?? undefined,
   };
-}
-
-async function createAuthLog(entry: {
-  type: 'login' | 'logout' | 'signup' | 'user-created' | 'user-updated' | 'user-deleted';
-  userId: string;
-  displayName: string;
-  email: string;
-  role: UserRole;
-  performedBy?: string | null;
-  note?: string | null;
-}) {
-  await query(
-    `INSERT INTO auth_logs
-      (id, type, user_id, display_name, email, role, performed_by, note)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      randomUUID(),
-      entry.type,
-      entry.userId,
-      entry.displayName,
-      entry.email,
-      entry.role,
-      entry.performedBy ?? null,
-      entry.note ?? null,
-    ],
-  );
 }
 
 router.post('/login', async (req, res) => {
@@ -167,6 +142,23 @@ router.post('/signup', async (req, res) => {
     updatedAt: now,
     lastLoginAt: now,
   } });
+});
+
+router.post('/logout', requireAuth, async (req: AuthRequest, res) => {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  await createAuthLog({
+    type: 'logout',
+    userId: req.user.id,
+    displayName: `${req.user.firstName} ${req.user.lastName}`,
+    email: req.user.email,
+    role: req.user.role,
+    note: 'User logged out',
+  });
+
+  res.status(204).send();
 });
 
 router.get('/me', requireAuth, async (req: AuthRequest, res) => {

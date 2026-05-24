@@ -7,7 +7,7 @@ import {
   PersonNameInput,
   resolvePersonName,
 } from '../lib/personName';
-import { setToken, getToken, loginApi, signupApi, meApi, getUsersApi, getAuthLogsApi, createUserApi, updateUserApi, deleteUserApi, updateProfileApi } from '../lib/api';
+import { setToken, getToken, loginApi, signupApi, meApi, logoutApi, getUsersApi, getAuthLogsApi, createUserApi, updateUserApi, deleteUserApi, updateProfileApi } from '../lib/api';
 
 type UserRole = 'user' | 'admin';
 type UserStatus = 'active' | 'inactive';
@@ -77,7 +77,7 @@ interface AuthContextType {
     password: string,
     name: PersonNameInput,
   ) => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => void;
   createUser: (input: CreateUserInput) => boolean;
   updateUser: (id: string, updates: UpdateUserInput) => boolean;
@@ -294,7 +294,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await logoutApi();
+    } catch {
+      // ignore logout errors and clear client session anyway
+    }
+
     if (user) {
       appendLog({
         type: 'logout',
@@ -305,6 +311,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         note: 'User logged out',
       });
     }
+
     setUser(null);
     setToken(null);
   };

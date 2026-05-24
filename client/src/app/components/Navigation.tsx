@@ -5,13 +5,12 @@ import {
   ArrowRight,
   Bell,
   Home,
-  LogOut,
   MessageCircle,
   Pill,
   Shield,
   User,
 } from 'lucide-react';
-import { Button } from './ui/button';
+import { LogoutConfirmDialog } from './LogoutConfirmDialog';
 
 interface NavigationProps {
   currentView: string;
@@ -58,14 +57,11 @@ export function Navigation({ currentView, onViewChange }: NavigationProps) {
               </div>
             </div>
 
-            <Button
-              variant="secondary"
-              className="border-white/30 bg-white/20 text-white backdrop-blur-sm hover:bg-white/30"
-              onClick={logout}
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Logout
-            </Button>
+            <LogoutConfirmDialog
+              onConfirm={logout}
+              buttonVariant="secondary"
+              buttonClassName="border-white/30 bg-white/20 text-white backdrop-blur-sm hover:bg-white/30"
+            />
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2 rounded-2xl border border-white/20 bg-white/15 p-2 backdrop-blur-sm">

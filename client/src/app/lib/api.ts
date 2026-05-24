@@ -62,6 +62,10 @@ export async function updateProfileApi(payload: any) {
   return apiFetch('/auth/profile', { method: 'PUT', body: JSON.stringify(payload) });
 }
 
+export async function logoutApi() {
+  return apiFetch('/auth/logout', { method: 'POST' });
+}
+
 export async function getUsersApi() {
   return apiFetch('/users');
 }

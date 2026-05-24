@@ -35,6 +35,7 @@ npm run dev
 
 - `POST /api/auth/login` — login with email/password
 - `POST /api/auth/signup` — create a new user
+- `POST /api/auth/logout` — logout current user
 - `GET /api/auth/me` — get authenticated user profile
 - `PUT /api/auth/profile` — update profile for current user
 - `GET /api/users` — admin only, list users

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { query } from '../db.js';
 import { hashPassword } from '../utils/hash.js';
+import { createAuthLog } from '../utils/authLog.js';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth.js';
 import { SanitizedUser, UserRole, UserStatus, UserRow } from '../types.js';
 
@@ -54,7 +55,7 @@ router.get('/:id', async (req: AuthRequest, res) => {
   res.json({ user: sanitizeUser(user) });
 });
 
-router.post('/', requireRole('admin'), async (req, res) => {
+router.post('/', requireRole('admin'), async (req: AuthRequest, res) => {
   const {
     email,
     password,
@@ -113,6 +114,16 @@ router.post('/', requireRole('admin'), async (req, res) => {
     ],
   );
 
+  await createAuthLog({
+    type: 'user-created',
+    userId,
+    displayName: `${firstName.trim()} ${lastName.trim()}`,
+    email: normalizedEmail,
+    role: role as UserRole,
+    performedBy: req.user?.email ?? null,
+    note: 'User created by admin',
+  });
+
   res.status(201).json({ user: sanitizeUser({
     id: userId,
     email: normalizedEmail,
@@ -134,7 +145,7 @@ router.post('/', requireRole('admin'), async (req, res) => {
   }) });
 });
 
-router.put('/:id', requireRole('admin'), async (req, res) => {
+router.put('/:id', requireRole('admin'), async (req: AuthRequest, res) => {
   const { id } = req.params;
   const {
     email,
@@ -233,6 +244,17 @@ router.put('/:id', requireRole('admin'), async (req, res) => {
 
   const updatedRows = await query<UserRow[]>('SELECT * FROM users WHERE id = ?', [id]);
   const updated = updatedRows[0];
+
+  await createAuthLog({
+    type: 'user-updated',
+    userId: updated.id,
+    displayName: `${updated.first_name} ${updated.last_name}`,
+    email: updated.email,
+    role: updated.role,
+    performedBy: req.user?.email ?? null,
+    note: 'User updated by admin',
+  });
+
   res.json({ user: sanitizeUser(updated) });
 });
 
@@ -245,12 +267,24 @@ router.delete('/:id', requireRole('admin'), async (req: AuthRequest, res) => {
     return res.status(400).json({ message: 'Admin cannot delete themselves' });
   }
 
-  const rows = await query<UserRow[]>('SELECT id FROM users WHERE id = ?', [id]);
+  const rows = await query<UserRow[]>('SELECT * FROM users WHERE id = ?', [id]);
   if (rows.length === 0) {
     return res.status(404).json({ message: 'User not found' });
   }
 
+  const deletedUser = rows[0];
   await query('DELETE FROM users WHERE id = ?', [id]);
+
+  await createAuthLog({
+    type: 'user-deleted',
+    userId: deletedUser.id,
+    displayName: `${deletedUser.first_name} ${deletedUser.last_name}`,
+    email: deletedUser.email,
+    role: deletedUser.role,
+    performedBy: req.user.email,
+    note: 'User deleted by admin',
+  });
+
   res.status(204).send();
 });
 
