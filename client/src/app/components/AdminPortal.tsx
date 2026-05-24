@@ -126,10 +126,64 @@ const formatDateTime = (value?: string) =>
 
 const formatDate = (value?: string) =>
   value
-    ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'UTC' }).format(
-        new Date(`${normalizeDateInputValue(value)}T00:00:00Z`),
-      )
+    ? new Intl.DateTimeFormat('en-US', {
+        dateStyle: 'medium',
+        timeZone: 'UTC',
+      }).format(new Date(`${normalizeDateInputValue(value)}T00:00:00Z`))
     : 'Not provided';
+
+function normalizeOptionalString(value?: string | null) {
+  return value?.trim() || undefined;
+}
+
+function getEditFormChangedFields(
+  formState: UserFormState,
+  selectedUser: AdminUser,
+  passwordDirty: boolean,
+) {
+  const normalizedName = normalizePersonNameInput(formState.personName);
+  const changes: string[] = [];
+
+  if (normalizedName.firstName !== selectedUser.firstName)
+    changes.push('firstName');
+  if (
+    (normalizedName.middleName || undefined) !==
+    (selectedUser.middleName || undefined)
+  )
+    changes.push('middleName');
+  if (normalizedName.lastName !== selectedUser.lastName)
+    changes.push('lastName');
+  if (
+    (normalizedName.suffix || undefined) !== (selectedUser.suffix || undefined)
+  )
+    changes.push('suffix');
+  if (formState.email.trim() !== selectedUser.email) changes.push('email');
+  if (formState.role !== selectedUser.role) changes.push('role');
+  if (formState.status !== selectedUser.status) changes.push('status');
+  if (
+    normalizeOptionalString(formState.phone) !==
+    normalizeOptionalString(selectedUser.phone)
+  )
+    changes.push('phone');
+  if (
+    normalizeDateInputValue(formState.dateOfBirth) !==
+    normalizeDateInputValue(selectedUser.dateOfBirth)
+  )
+    changes.push('dateOfBirth');
+  if (
+    normalizeOptionalString(formState.emergencyContact) !==
+    normalizeOptionalString(selectedUser.emergencyContact)
+  )
+    changes.push('emergencyContact');
+  if (
+    normalizeOptionalString(formState.notes) !==
+    normalizeOptionalString(selectedUser.notes)
+  )
+    changes.push('notes');
+  if (passwordDirty && formState.password.trim()) changes.push('password');
+
+  return changes;
+}
 
 function roleBadgeClass(role: AdminUser['role']) {
   return role === 'admin'
@@ -181,6 +235,7 @@ export function AdminPortal() {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const [formState, setFormState] = useState<UserFormState>(emptyForm());
+  const [passwordDirty, setPasswordDirty] = useState(false);
 
   if (!user || user.role !== 'admin') {
     return (
@@ -248,6 +303,7 @@ export function AdminPortal() {
     setSelectedUser(null);
     setFormMode('create');
     setFormState(emptyForm());
+    setPasswordDirty(false);
     setIsFormOpen(true);
   };
 
@@ -270,6 +326,7 @@ export function AdminPortal() {
       emergencyContact: candidate.emergencyContact ?? '',
       notes: candidate.notes ?? '',
     });
+    setPasswordDirty(false);
     setIsFormOpen(true);
   };
 
@@ -318,6 +375,7 @@ export function AdminPortal() {
     if (formMode === 'create') {
       const success = createUser({
         ...normalizedName,
+        suffix: normalizedName.suffix || undefined,
         email: formState.email.trim(),
         password: formState.password,
         role: formState.role,
@@ -345,12 +403,22 @@ export function AdminPortal() {
       return;
     }
 
+    const changedFields = getEditFormChangedFields(
+      formState,
+      selectedUser,
+      passwordDirty,
+    );
+    if (changedFields.length === 0) {
+      toast.info('No changes to save.');
+      return;
+    }
+
     const success = updateUser(selectedUser.id, {
       ...normalizedName,
       middleName: normalizedName.middleName || undefined,
-      suffix: normalizedName.suffix || undefined,
+      nameSuffix: normalizedName.suffix || undefined,
       email: formState.email.trim(),
-      password: formState.password.trim() || undefined,
+      password: passwordDirty ? formState.password.trim() || undefined : undefined,
       role: formState.role,
       status: formState.status,
       phone: formState.phone.trim() || undefined,
@@ -370,6 +438,11 @@ export function AdminPortal() {
     setIsFormOpen(false);
     setSelectedUser(null);
   };
+
+  const hasEditChanges =
+    formMode === 'edit' &&
+    selectedUser !== null &&
+    getEditFormChangedFields(formState, selectedUser, passwordDirty).length > 0;
 
   const handleDelete = () => {
     if (!deleteTarget) {
@@ -806,6 +879,7 @@ export function AdminPortal() {
           if (!open) {
             setSelectedUser(null);
             setFormState(emptyForm());
+            setPasswordDirty(false);
           }
         }}
       >
@@ -936,12 +1010,16 @@ export function AdminPortal() {
                 </label>
                 <Input
                   type="password"
+                  autoComplete="new-password"
                   value={formState.password}
                   onChange={(event) =>
-                    setFormState((current) => ({
-                      ...current,
-                      password: event.target.value,
-                    }))
+                    {
+                      setPasswordDirty(true);
+                      setFormState((current) => ({
+                        ...current,
+                        password: event.target.value,
+                      }));
+                    }
                   }
                   placeholder="••••••••"
                 />
@@ -1059,6 +1137,7 @@ export function AdminPortal() {
                 <Button
                   type="submit"
                   className="bg-primary hover:bg-primary/90"
+                  disabled={formMode === 'edit' ? !hasEditChanges : false}
                 >
                   {formMode === 'create' ? 'Create user' : 'Save changes'}
                 </Button>

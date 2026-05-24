@@ -33,6 +33,10 @@ function toDateOnly(value: unknown): string | undefined {
   return undefined;
 }
 
+function datesMatch(left: unknown, right: unknown): boolean {
+  return toDateOnly(left) === toDateOnly(right);
+}
+
 function sanitizeUser(row: UserRow): SanitizedUser {
   return {
     id: row.id,
@@ -54,7 +58,11 @@ function sanitizeUser(row: UserRow): SanitizedUser {
   };
 }
 
-function buildUserUpdateNote(before: UserRow, after: UserRow, passwordChanged: boolean): string {
+function buildUserUpdateNote(
+  before: UserRow,
+  after: UserRow,
+  passwordChanged: boolean,
+): string {
   const changedFields: string[] = [];
   const add = (label: string, oldValue: unknown, newValue: unknown) => {
     if ((oldValue ?? null) !== (newValue ?? null)) {
@@ -71,7 +79,9 @@ function buildUserUpdateNote(before: UserRow, after: UserRow, passwordChanged: b
   add('status', before.status, after.status);
   add('avatarUrl', before.avatar_url, after.avatar_url);
   add('phone', before.phone, after.phone);
-  add('dateOfBirth', before.date_of_birth, after.date_of_birth);
+  if (!datesMatch(before.date_of_birth, after.date_of_birth)) {
+    changedFields.push('dateOfBirth');
+  }
   add('emergencyContact', before.emergency_contact, after.emergency_contact);
   add('notes', before.notes, after.notes);
 
@@ -89,7 +99,9 @@ function buildUserUpdateNote(before: UserRow, after: UserRow, passwordChanged: b
 router.use(requireAuth);
 
 router.get('/', requireRole('admin'), async (req, res) => {
-  const rows = await query<UserRow[]>('SELECT * FROM users ORDER BY created_at DESC');
+  const rows = await query<UserRow[]>(
+    'SELECT * FROM users ORDER BY created_at DESC',
+  );
   res.json({ users: rows.map(sanitizeUser) });
 });
 
@@ -133,12 +145,18 @@ router.post('/', requireRole('admin'), async (req: AuthRequest, res) => {
     return res.status(400).json({ message: 'Missing required user fields' });
   }
 
-  if (!['user', 'admin'].includes(role) || !['active', 'inactive'].includes(status)) {
+  if (
+    !['user', 'admin'].includes(role) ||
+    !['active', 'inactive'].includes(status)
+  ) {
     return res.status(400).json({ message: 'Invalid role or status' });
   }
 
   const normalizedEmail = email.trim().toLowerCase();
-  const existing = await query<UserRow[]>('SELECT id FROM users WHERE email = ?', [normalizedEmail]);
+  const existing = await query<UserRow[]>(
+    'SELECT id FROM users WHERE email = ?',
+    [normalizedEmail],
+  );
   if (existing.length > 0) {
     return res.status(409).json({ message: 'Email already in use' });
   }
@@ -181,25 +199,27 @@ router.post('/', requireRole('admin'), async (req: AuthRequest, res) => {
     note: `User created by admin. Initial values: role=${role}, status=${status}, email=${normalizedEmail}`,
   });
 
-  res.status(201).json({ user: sanitizeUser({
-    id: userId,
-    email: normalizedEmail,
-    password_hash: passwordHash,
-    first_name: firstName.trim(),
-    middle_name: middleName?.trim() || null,
-    last_name: lastName.trim(),
-    name_suffix: nameSuffix?.trim() || null,
-    role: role as UserRole,
-    status: status as UserStatus,
-    avatar_url: avatarUrl?.trim() || null,
-    phone: phone?.trim() || null,
-    date_of_birth: dateOfBirth || null,
-    emergency_contact: emergencyContact?.trim() || null,
-    notes: notes?.trim() || null,
-    created_at: now,
-    updated_at: now,
-    last_login_at: null,
-  }) });
+  res.status(201).json({
+    user: sanitizeUser({
+      id: userId,
+      email: normalizedEmail,
+      password_hash: passwordHash,
+      first_name: firstName.trim(),
+      middle_name: middleName?.trim() || null,
+      last_name: lastName.trim(),
+      name_suffix: nameSuffix?.trim() || null,
+      role: role as UserRole,
+      status: status as UserStatus,
+      avatar_url: avatarUrl?.trim() || null,
+      phone: phone?.trim() || null,
+      date_of_birth: dateOfBirth || null,
+      emergency_contact: emergencyContact?.trim() || null,
+      notes: notes?.trim() || null,
+      created_at: now,
+      updated_at: now,
+      last_login_at: null,
+    }),
+  });
 });
 
 router.put('/:id', requireRole('admin'), async (req: AuthRequest, res) => {
@@ -229,59 +249,93 @@ router.put('/:id', requireRole('admin'), async (req: AuthRequest, res) => {
   const updates: string[] = [];
   const params: any[] = [];
 
-  if (email) {
+  const normalizedEmail = email?.trim().toLowerCase();
+  if (normalizedEmail && normalizedEmail !== user.email) {
     updates.push('email = ?');
-    params.push(email.trim().toLowerCase());
+    params.push(normalizedEmail);
   }
-  if (firstName) {
+  const normalizedFirstName = firstName?.trim();
+  if (normalizedFirstName && normalizedFirstName !== user.first_name) {
     updates.push('first_name = ?');
-    params.push(firstName.trim());
+    params.push(normalizedFirstName);
   }
-  if (middleName !== undefined) {
+  const normalizedMiddleName =
+    middleName !== undefined ? middleName?.trim() || null : undefined;
+  if (
+    normalizedMiddleName !== undefined &&
+    normalizedMiddleName !== user.middle_name
+  ) {
     updates.push('middle_name = ?');
-    params.push(middleName?.trim() || null);
+    params.push(normalizedMiddleName);
   }
-  if (lastName) {
+  const normalizedLastName = lastName?.trim();
+  if (normalizedLastName && normalizedLastName !== user.last_name) {
     updates.push('last_name = ?');
-    params.push(lastName.trim());
+    params.push(normalizedLastName);
   }
-  if (nameSuffix !== undefined) {
+  const normalizedNameSuffix =
+    nameSuffix !== undefined ? nameSuffix?.trim() || null : undefined;
+  if (
+    normalizedNameSuffix !== undefined &&
+    normalizedNameSuffix !== user.name_suffix
+  ) {
     updates.push('name_suffix = ?');
-    params.push(nameSuffix?.trim() || null);
+    params.push(normalizedNameSuffix);
   }
-  if (role) {
+  if (role && role !== user.role) {
     if (!['user', 'admin'].includes(role)) {
       return res.status(400).json({ message: 'Invalid role' });
     }
     updates.push('role = ?');
     params.push(role);
   }
-  if (status) {
+  if (status && status !== user.status) {
     if (!['active', 'inactive'].includes(status)) {
       return res.status(400).json({ message: 'Invalid status' });
     }
     updates.push('status = ?');
     params.push(status);
   }
-  if (avatarUrl !== undefined) {
+  const normalizedAvatarUrl =
+    avatarUrl !== undefined ? avatarUrl?.trim() || null : undefined;
+  if (
+    normalizedAvatarUrl !== undefined &&
+    normalizedAvatarUrl !== user.avatar_url
+  ) {
     updates.push('avatar_url = ?');
-    params.push(avatarUrl?.trim() || null);
+    params.push(normalizedAvatarUrl);
   }
-  if (phone !== undefined) {
+  const normalizedPhone =
+    phone !== undefined ? phone?.trim() || null : undefined;
+  if (normalizedPhone !== undefined && normalizedPhone !== user.phone) {
     updates.push('phone = ?');
-    params.push(phone?.trim() || null);
+    params.push(normalizedPhone);
   }
-  if (dateOfBirth !== undefined) {
+  const normalizedDateOfBirth =
+    dateOfBirth !== undefined ? (toDateOnly(dateOfBirth) ?? null) : undefined;
+  if (
+    normalizedDateOfBirth !== undefined &&
+    !datesMatch(normalizedDateOfBirth, user.date_of_birth)
+  ) {
     updates.push('date_of_birth = ?');
-    params.push(dateOfBirth || null);
+    params.push(normalizedDateOfBirth);
   }
-  if (emergencyContact !== undefined) {
+  const normalizedEmergencyContact =
+    emergencyContact !== undefined
+      ? emergencyContact?.trim() || null
+      : undefined;
+  if (
+    normalizedEmergencyContact !== undefined &&
+    normalizedEmergencyContact !== user.emergency_contact
+  ) {
     updates.push('emergency_contact = ?');
-    params.push(emergencyContact?.trim() || null);
+    params.push(normalizedEmergencyContact);
   }
-  if (notes !== undefined) {
+  const normalizedNotes =
+    notes !== undefined ? notes?.trim() || null : undefined;
+  if (normalizedNotes !== undefined && normalizedNotes !== user.notes) {
     updates.push('notes = ?');
-    params.push(notes?.trim() || null);
+    params.push(normalizedNotes);
   }
   if (password) {
     const passwordHash = await hashPassword(password.trim());
@@ -290,7 +344,7 @@ router.put('/:id', requireRole('admin'), async (req: AuthRequest, res) => {
   }
 
   if (updates.length === 0) {
-    return res.status(400).json({ message: 'No data to update' });
+    return res.json({ user: sanitizeUser(user) });
   }
 
   params.push(new Date().toISOString().slice(0, 19).replace('T', ' '));
@@ -299,7 +353,10 @@ router.put('/:id', requireRole('admin'), async (req: AuthRequest, res) => {
   const sql = `UPDATE users SET ${updates.join(', ')}, updated_at = ? WHERE id = ?`;
   await query(sql, params);
 
-  const updatedRows = await query<UserRow[]>('SELECT * FROM users WHERE id = ?', [id]);
+  const updatedRows = await query<UserRow[]>(
+    'SELECT * FROM users WHERE id = ?',
+    [id],
+  );
   const updated = updatedRows[0];
   const updateNote = buildUserUpdateNote(user, updated, Boolean(password));
 
