@@ -10,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from './ui/card';
-import { AlertCircle, Pill, Shield } from 'lucide-react';
+import { AlertCircle, Pill, Shield, KeyRound, ArrowLeft } from 'lucide-react';
 import { Alert, AlertDescription } from './ui/alert';
 
 interface LoginPageProps {
@@ -18,9 +18,13 @@ interface LoginPageProps {
 }
 
 export function LoginPage({ onSwitchToSignup }: LoginPageProps) {
-  const { login } = useAuth();
+  const { login, loginWithToken } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loginMethod, setLoginMethod] = useState<'credentials' | 'token'>(
+    'credentials',
+  );
+  const [syncToken, setSyncToken] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -29,10 +33,22 @@ export function LoginPage({ onSwitchToSignup }: LoginPageProps) {
     setError('');
     setLoading(true);
 
-    const success = await login(email, password);
-
-    if (!success) {
-      setError('Invalid email or password');
+    let success = false;
+    if (loginMethod === 'credentials') {
+      success = await login(email, password);
+      if (!success) {
+        setError('Invalid email or password');
+      }
+    } else {
+      if (!syncToken.trim()) {
+        setError('Please enter a session sync token');
+        setLoading(false);
+        return;
+      }
+      success = await loginWithToken(syncToken.trim());
+      if (!success) {
+        setError('Invalid, expired, or malformed session sync token');
+      }
     }
 
     setLoading(false);
@@ -82,81 +98,94 @@ export function LoginPage({ onSwitchToSignup }: LoginPageProps) {
             <Card className="border-0 shadow-none">
               <CardHeader className="space-y-4 px-0 pt-0">
                 <div className="flex items-center justify-center gap-2 mb-2">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/10">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/10 animate-pulse">
                     <Pill className="w-7 h-7" />
                   </div>
                 </div>
                 <CardTitle className="text-center text-2xl">
-                  Welcome back
+                  {loginMethod === 'credentials'
+                    ? 'Welcome back'
+                    : 'Session sync'}
                 </CardTitle>
                 <CardDescription className="text-center">
-                  Sign in to continue your treatment support workflow.
+                  {loginMethod === 'credentials'
+                    ? 'Sign in to continue your treatment support workflow.'
+                    : 'Resume your active session from another browser.'}
                 </CardDescription>
               </CardHeader>
               <CardContent className="px-0 pb-0">
                 <form onSubmit={handleSubmit} className="space-y-4">
                   {error && (
-                    <Alert variant="destructive">
+                    <Alert
+                      variant="destructive"
+                      className="animate-in fade-in slide-in-from-top-1 duration-200"
+                    >
                       <AlertCircle className="h-4 w-4" />
                       <AlertDescription>{error}</AlertDescription>
                     </Alert>
                   )}
 
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
+                  {loginMethod === 'credentials' ? (
+                    <div className="space-y-4 transition-all duration-300">
+                      <div className="space-y-2 animate-in fade-in duration-200">
+                        <Label htmlFor="email">Email</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder="you@example.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          required={loginMethod === 'credentials'}
+                        />
+                      </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      placeholder="Enter your password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
-                  </div>
+                      <div className="space-y-2 animate-in fade-in duration-200">
+                        <Label htmlFor="password">Password</Label>
+                        <Input
+                          id="password"
+                          type="password"
+                          placeholder="Enter your password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          required={loginMethod === 'credentials'}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4 transition-all duration-300 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      <div className="space-y-2">
+                        <Label htmlFor="syncToken">Session Sync Token</Label>
+                        <textarea
+                          id="syncToken"
+                          placeholder="Paste your secure session sync token here..."
+                          value={syncToken}
+                          onChange={(e) => setSyncToken(e.target.value)}
+                          required={loginMethod === 'token'}
+                          rows={4}
+                          className="flex min-h-[100px] w-full rounded-xl border border-input-background bg-input bg-input-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 border-muted-foreground/15 pr-3 select-all focus:border-primary/50 transition-all duration-200"
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-normal">
+                        This secure sync token resides in the Profile page of
+                        your active session. Make sure it is from an active
+                        device that logged in within the past 12 hours.
+                      </p>
+                    </div>
+                  )}
 
                   <Button
                     type="submit"
-                    className="w-full bg-primary hover:bg-primary/90"
+                    className="w-full bg-primary hover:bg-primary/90 cursor-pointer shadow-md transition-all duration-200"
                     disabled={loading}
                   >
-                    {loading ? 'Signing in...' : 'Sign In'}
+                    {loading
+                      ? 'Signing in...'
+                      : loginMethod === 'credentials'
+                        ? 'Sign In'
+                        : 'Sync & Continue'}
                   </Button>
 
-                  <div className="text-center space-y-2">
-                    <p className="text-sm text-muted-foreground">
-                      Don't have an account?{' '}
-                      <button
-                        type="button"
-                        onClick={onSwitchToSignup}
-                        className="text-primary hover:underline"
-                      >
-                        Sign up
-                      </button>
-                    </p>
-                    <div className="pt-4 border-t">
-                      <p className="text-xs text-muted-foreground">
-                        Demo credentials:
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        User: user@doti.com / password123
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Admin: admin@doti.com / admin123
-                      </p>
-                    </div>
-                  </div>
+                
                 </form>
               </CardContent>
             </Card>

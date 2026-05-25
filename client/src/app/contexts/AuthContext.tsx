@@ -105,6 +105,7 @@ interface AuthContextType {
     password: string,
     name: PersonNameInput,
   ) => Promise<boolean>;
+  loginWithToken: (token: string) => Promise<boolean>;
   logout: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => void;
   createUser: (input: CreateUserInput) => boolean;
@@ -372,6 +373,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const loginWithToken = async (token: string): Promise<boolean> => {
+    try {
+      setToken(token);
+      const resp = await meApi();
+      const respUser = resp.user as User;
+      setUser(respUser);
+
+      if (respUser.role === 'admin') {
+        const usersResp = await getUsersApi();
+        setStoredUsers(usersResp.users || []);
+        const logsResp = await getAuthLogsApi();
+        setAuthLogs((logsResp.authLogs || []).map(normalizeAuthLog));
+      }
+
+      return true;
+    } catch (err) {
+      setToken(null);
+      return false;
+    }
+  };
+
   const logout = async () => {
     try {
       await logoutApi();
@@ -467,6 +489,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         authLogs,
         login,
         signup,
+        loginWithToken,
         logout,
         updateProfile,
         createUser,
