@@ -86,6 +86,15 @@ type UpdateUserInput = Partial<
   password?: string;
 };
 
+function mapPersonNameToApiPayload(name: PersonNameInput) {
+  return {
+    firstName: name.firstName,
+    middleName: name.middleName,
+    lastName: name.lastName,
+    nameSuffix: name.suffix,
+  };
+}
+
 interface AuthContextType {
   user: User | null;
   users: AdminUser[];
@@ -96,6 +105,7 @@ interface AuthContextType {
     password: string,
     name: PersonNameInput,
   ) => Promise<boolean>;
+  loginWithToken: (token: string) => Promise<boolean>;
   logout: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => void;
   createUser: (input: CreateUserInput) => boolean;
@@ -352,16 +362,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const payload = {
         email: email.trim().toLowerCase(),
         password,
-        firstName: name.firstName,
-        lastName: name.lastName,
-        middleName: name.middleName,
-        nameSuffix: name.suffix,
+        ...mapPersonNameToApiPayload(name),
       };
       const resp = await signupApi(payload);
       setToken(resp.token);
       setUser(resp.user);
       return true;
     } catch (err) {
+      return false;
+    }
+  };
+
+  const loginWithToken = async (token: string): Promise<boolean> => {
+    try {
+      setToken(token);
+      const resp = await meApi();
+      const respUser = resp.user as User;
+      setUser(respUser);
+
+      if (respUser.role === 'admin') {
+        const usersResp = await getUsersApi();
+        setStoredUsers(usersResp.users || []);
+        const logsResp = await getAuthLogsApi();
+        setAuthLogs((logsResp.authLogs || []).map(normalizeAuthLog));
+      }
+
+      return true;
+    } catch (err) {
+      setToken(null);
       return false;
     }
   };
@@ -404,7 +432,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user || user.role !== 'admin') return false;
     (async () => {
       try {
-        await createUserApi(input);
+        const payload = {
+          ...input,
+          ...mapPersonNameToApiPayload(input),
+        };
+        await createUserApi(payload);
         const usersResp = await getUsersApi();
         setStoredUsers(usersResp.users || []);
       } catch (err) {
@@ -418,7 +450,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user || user.role !== 'admin') return false;
     (async () => {
       try {
-        await updateUserApi(id, updates);
+        const { suffix, password, ...rest } = updates;
+        const payload = {
+          ...rest,
+          nameSuffix: suffix,
+          ...(password?.trim() ? { password } : {}),
+        };
+        await updateUserApi(id, payload);
         const usersResp = await getUsersApi();
         setStoredUsers(usersResp.users || []);
       } catch (err) {
@@ -451,6 +489,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         authLogs,
         login,
         signup,
+        loginWithToken,
         logout,
         updateProfile,
         createUser,

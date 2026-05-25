@@ -33,6 +33,10 @@ function toDateOnly(value: unknown): string | undefined {
   return undefined;
 }
 
+function datesMatch(left: unknown, right: unknown): boolean {
+  return toDateOnly(left) === toDateOnly(right);
+}
+
 function sanitizeUser(row: UserRow): SanitizedUser {
   return {
     id: row.id,
@@ -54,7 +58,11 @@ function sanitizeUser(row: UserRow): SanitizedUser {
   };
 }
 
-function buildProfileUpdateNote(before: UserRow, after: UserRow, passwordChanged: boolean): string {
+function buildProfileUpdateNote(
+  before: UserRow,
+  after: UserRow,
+  passwordChanged: boolean,
+): string {
   const changedFields: string[] = [];
   const add = (label: string, oldValue: unknown, newValue: unknown) => {
     if ((oldValue ?? null) !== (newValue ?? null)) {
@@ -69,7 +77,9 @@ function buildProfileUpdateNote(before: UserRow, after: UserRow, passwordChanged
   add('nameSuffix', before.name_suffix, after.name_suffix);
   add('avatarUrl', before.avatar_url, after.avatar_url);
   add('phone', before.phone, after.phone);
-  add('dateOfBirth', before.date_of_birth, after.date_of_birth);
+  if (!datesMatch(before.date_of_birth, after.date_of_birth)) {
+    changedFields.push('dateOfBirth');
+  }
   add('emergencyContact', before.emergency_contact, after.emergency_contact);
   add('notes', before.notes, after.notes);
 
@@ -91,19 +101,28 @@ router.post('/login', async (req, res) => {
   }
 
   const normalizedEmail = email.trim().toLowerCase();
-  const rows = await query<UserRow[]>('SELECT * FROM users WHERE email = ?', [normalizedEmail]);
+  const rows = await query<UserRow[]>('SELECT * FROM users WHERE email = ?', [
+    normalizedEmail,
+  ]);
   const user = rows[0];
 
   if (!user || user.status !== 'active') {
-    return res.status(401).json({ message: 'Invalid credentials or inactive user' });
+    return res
+      .status(401)
+      .json({ message: 'Invalid credentials or inactive user' });
   }
 
   const validPassword = await comparePassword(password, user.password_hash);
   if (!validPassword) {
-    return res.status(401).json({ message: 'Invalid credentials or inactive user' });
+    return res
+      .status(401)
+      .json({ message: 'Invalid credentials or inactive user' });
   }
 
-  await query('UPDATE users SET last_login_at = NOW(), updated_at = NOW() WHERE id = ?', [user.id]);
+  await query(
+    'UPDATE users SET last_login_at = NOW(), updated_at = NOW() WHERE id = ?',
+    [user.id],
+  );
   await createAuthLog({
     type: 'login',
     userId: user.id,
@@ -113,7 +132,11 @@ router.post('/login', async (req, res) => {
     note: 'Successful login',
   });
 
-  const token = createToken({ userId: user.id, role: user.role, email: user.email });
+  const token = createToken({
+    userId: user.id,
+    role: user.role,
+    email: user.email,
+  });
   res.json({ token, user: sanitizeUser(user) });
 });
 
@@ -133,11 +156,16 @@ router.post('/signup', async (req, res) => {
   } = req.body as Record<string, any>;
 
   if (!email || !password || !firstName || !lastName) {
-    return res.status(400).json({ message: 'Email, password, first name, and last name are required' });
+    return res.status(400).json({
+      message: 'Email, password, first name, and last name are required',
+    });
   }
 
   const normalizedEmail = email.trim().toLowerCase();
-  const existing = await query<UserRow[]>('SELECT id FROM users WHERE email = ?', [normalizedEmail]);
+  const existing = await query<UserRow[]>(
+    'SELECT id FROM users WHERE email = ?',
+    [normalizedEmail],
+  );
   if (existing.length > 0) {
     return res.status(409).json({ message: 'Email already in use' });
   }
@@ -179,24 +207,27 @@ router.post('/signup', async (req, res) => {
   });
 
   const token = createToken({ userId, role: 'user', email: normalizedEmail });
-  res.status(201).json({ token, user: {
-    id: userId,
-    email: normalizedEmail,
-    firstName: firstName.trim(),
-    middleName: middleName?.trim() || undefined,
-    lastName: lastName.trim(),
-    nameSuffix: nameSuffix?.trim() || undefined,
-    role: 'user' as UserRole,
-    status: 'active' as const,
-    avatarUrl: avatarUrl?.trim() || undefined,
-    phone: phone?.trim() || undefined,
-    dateOfBirth: dateOfBirth || undefined,
-    emergencyContact: emergencyContact?.trim() || undefined,
-    notes: notes?.trim() || undefined,
-    createdAt: now,
-    updatedAt: now,
-    lastLoginAt: now,
-  } });
+  res.status(201).json({
+    token,
+    user: {
+      id: userId,
+      email: normalizedEmail,
+      firstName: firstName.trim(),
+      middleName: middleName?.trim() || undefined,
+      lastName: lastName.trim(),
+      nameSuffix: nameSuffix?.trim() || undefined,
+      role: 'user' as UserRole,
+      status: 'active' as const,
+      avatarUrl: avatarUrl?.trim() || undefined,
+      phone: phone?.trim() || undefined,
+      dateOfBirth: dateOfBirth || undefined,
+      emergencyContact: emergencyContact?.trim() || undefined,
+      notes: notes?.trim() || undefined,
+      createdAt: now,
+      updatedAt: now,
+      lastLoginAt: now,
+    },
+  });
 });
 
 router.post('/logout', requireAuth, async (req: AuthRequest, res) => {
@@ -225,8 +256,23 @@ router.put('/profile', requireAuth, async (req: AuthRequest, res) => {
     return res.status(401).json({ message: 'Unauthorized' });
   }
 
-  const { email, firstName, lastName, middleName, nameSuffix, avatarUrl, phone, dateOfBirth, emergencyContact, notes, password } = req.body as Record<string, any>;
-  const originalRows = await query<UserRow[]>('SELECT * FROM users WHERE id = ?', [req.user.id]);
+  const {
+    email,
+    firstName,
+    lastName,
+    middleName,
+    nameSuffix,
+    avatarUrl,
+    phone,
+    dateOfBirth,
+    emergencyContact,
+    notes,
+    password,
+  } = req.body as Record<string, any>;
+  const originalRows = await query<UserRow[]>(
+    'SELECT * FROM users WHERE id = ?',
+    [req.user.id],
+  );
   const original = originalRows[0];
   if (!original) {
     return res.status(404).json({ message: 'User not found' });
@@ -234,45 +280,79 @@ router.put('/profile', requireAuth, async (req: AuthRequest, res) => {
   const updates: any[] = [];
   const params: any[] = [];
 
-  if (email) {
+  const normalizedEmail = email?.trim().toLowerCase();
+  if (normalizedEmail && normalizedEmail !== original.email) {
     updates.push('email = ?');
-    params.push(email.trim().toLowerCase());
+    params.push(normalizedEmail);
   }
-  if (firstName) {
+  const normalizedFirstName = firstName?.trim();
+  if (normalizedFirstName && normalizedFirstName !== original.first_name) {
     updates.push('first_name = ?');
-    params.push(firstName.trim());
+    params.push(normalizedFirstName);
   }
-  if (middleName !== undefined) {
+  const normalizedMiddleName =
+    middleName !== undefined ? middleName?.trim() || null : undefined;
+  if (
+    normalizedMiddleName !== undefined &&
+    normalizedMiddleName !== original.middle_name
+  ) {
     updates.push('middle_name = ?');
-    params.push(middleName?.trim() || null);
+    params.push(normalizedMiddleName);
   }
-  if (lastName) {
+  const normalizedLastName = lastName?.trim();
+  if (normalizedLastName && normalizedLastName !== original.last_name) {
     updates.push('last_name = ?');
-    params.push(lastName.trim());
+    params.push(normalizedLastName);
   }
-  if (nameSuffix !== undefined) {
+  const normalizedNameSuffix =
+    nameSuffix !== undefined ? nameSuffix?.trim() || null : undefined;
+  if (
+    normalizedNameSuffix !== undefined &&
+    normalizedNameSuffix !== original.name_suffix
+  ) {
     updates.push('name_suffix = ?');
-    params.push(nameSuffix?.trim() || null);
+    params.push(normalizedNameSuffix);
   }
-  if (avatarUrl !== undefined) {
+  const normalizedAvatarUrl =
+    avatarUrl !== undefined ? avatarUrl?.trim() || null : undefined;
+  if (
+    normalizedAvatarUrl !== undefined &&
+    normalizedAvatarUrl !== original.avatar_url
+  ) {
     updates.push('avatar_url = ?');
-    params.push(avatarUrl?.trim() || null);
+    params.push(normalizedAvatarUrl);
   }
-  if (phone !== undefined) {
+  const normalizedPhone =
+    phone !== undefined ? phone?.trim() || null : undefined;
+  if (normalizedPhone !== undefined && normalizedPhone !== original.phone) {
     updates.push('phone = ?');
-    params.push(phone?.trim() || null);
+    params.push(normalizedPhone);
   }
-  if (dateOfBirth !== undefined) {
+  const normalizedDateOfBirth =
+    dateOfBirth !== undefined ? (toDateOnly(dateOfBirth) ?? null) : undefined;
+  if (
+    normalizedDateOfBirth !== undefined &&
+    !datesMatch(normalizedDateOfBirth, original.date_of_birth)
+  ) {
     updates.push('date_of_birth = ?');
-    params.push(dateOfBirth || null);
+    params.push(normalizedDateOfBirth);
   }
-  if (emergencyContact !== undefined) {
+  const normalizedEmergencyContact =
+    emergencyContact !== undefined
+      ? emergencyContact?.trim() || null
+      : undefined;
+  if (
+    normalizedEmergencyContact !== undefined &&
+    normalizedEmergencyContact !== original.emergency_contact
+  ) {
     updates.push('emergency_contact = ?');
-    params.push(emergencyContact?.trim() || null);
+    params.push(normalizedEmergencyContact);
   }
-  if (notes !== undefined) {
+  const normalizedNotes =
+    notes !== undefined ? notes?.trim() || null : undefined;
+  if (normalizedNotes !== undefined && normalizedNotes !== original.notes) {
     updates.push('notes = ?');
-    params.push(notes?.trim() || null);
+    params.push(normalizedNotes);
   }
   if (password) {
     const passwordHash = await hashPassword(password.trim());
@@ -281,7 +361,7 @@ router.put('/profile', requireAuth, async (req: AuthRequest, res) => {
   }
 
   if (updates.length === 0) {
-    return res.status(400).json({ message: 'No profile fields provided' });
+    return res.json({ user: sanitizeUser(original) });
   }
 
   params.push(new Date().toISOString().slice(0, 19).replace('T', ' '));
@@ -290,9 +370,15 @@ router.put('/profile', requireAuth, async (req: AuthRequest, res) => {
   const sql = `UPDATE users SET ${updates.join(', ')}, updated_at = ? WHERE id = ?`;
   await query(sql, params);
 
-  const rows = await query<UserRow[]>('SELECT * FROM users WHERE id = ?', [req.user.id]);
+  const rows = await query<UserRow[]>('SELECT * FROM users WHERE id = ?', [
+    req.user.id,
+  ]);
   const updated = rows[0];
-  const updateNote = buildProfileUpdateNote(original, updated, Boolean(password));
+  const updateNote = buildProfileUpdateNote(
+    original,
+    updated,
+    Boolean(password),
+  );
 
   await createAuthLog({
     type: 'user-updated',
